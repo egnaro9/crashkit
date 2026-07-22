@@ -1,0 +1,23 @@
+# Deploy: Render (web). The AI Crash Test — FastAPI backend + static frontend,
+# one origin. Render serves it over HTTPS automatically, which is mandatory for a
+# BYOK page (on plain HTTP a man-in-the-middle could inject key-stealing JS).
+#
+# gradecore (the deterministic grader engine) and model-drift (the reused suite +
+# mock transport) install from their own repos at build time.
+#
+# The run store is in-memory, so the leaderboard is per-session and resets on
+# restart. A persistent datastore + abuse hardening (rate limits, spend caps) are
+# Phase 3 — deliberately not exposed to a writable public board yet.
+#
+# Free-tier honesty, stated because the live link is public: the service sleeps
+# after ~15 min idle and takes ~30s to wake.
+services:
+  - type: web
+    name: crashkit
+    runtime: python
+    plan: free
+    buildCommand: >-
+      pip install "git+https://github.com/egnaro9/gradecore"
+      "git+https://github.com/egnaro9/model-drift" -e .
+    startCommand: uvicorn crashkit.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
