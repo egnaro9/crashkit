@@ -1,0 +1,33 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      # crashkit is one lens on a shared engine: it installs gradecore (the
+      # deterministic grader core) and model-drift (the reused frozen suite +
+      # mock transport) from their own repos, then itself.
+      - name: Install the shared engine, the reused suite, and crashkit
+        run: |
+          python -m pip install --upgrade pip
+          pip install "gradecore @ git+https://github.com/egnaro9/gradecore"
+          pip install "modeldrift @ git+https://github.com/egnaro9/model-drift"
+          pip install -e ".[dev]"
+      # The whole point is a grade that reproduces, so the suite includes a test
+      # asserting a serialized run is byte-identical across runs (no LLM judge,
+      # no clock, no latency in the wire form).
+      - name: Tests — incl. the determinism guarantee
+        run: pytest -q
