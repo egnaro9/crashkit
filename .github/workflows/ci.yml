@@ -23,8 +23,8 @@ jobs:
       - name: Install the shared engine, the reused suite, and crashkit
         run: |
           python -m pip install --upgrade pip
-          pip install "gradecore @ git+https://github.com/egnaro9/gradecore"
-          pip install "modeldrift @ git+https://github.com/egnaro9/model-drift"
+          pip install git+https://github.com/egnaro9/gradecore
+          pip install git+https://github.com/egnaro9/model-drift
           pip install -e ".[dev]"
       # The whole point is a grade that reproduces, so the suite includes a test
       # asserting a serialized run is byte-identical across runs (no LLM judge,
