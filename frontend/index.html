@@ -14,18 +14,29 @@
   .wrap { max-width:920px; margin:0 auto; padding:28px 20px 60px; }
   h1 { font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
   .sub { color:var(--muted); margin:0 0 24px; } .sub code { color:var(--accent); }
+  .sub b { color:var(--fg); font-weight:600; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:20px; }
   label { color:var(--muted); font-size:13px; display:block; margin-bottom:6px; }
   select, button, input { font:inherit; border-radius:7px; border:1px solid var(--line); }
-  select, input { background:#0d141d; color:var(--fg); padding:9px 12px; }
-  input { width:100%; }
+  select, input { background:#0d141d; color:var(--fg); padding:9px 12px; } input { width:100%; }
   button { background:var(--accent); color:#08111f; border:none; padding:10px 18px; font-weight:600; cursor:pointer; }
   button:disabled { opacity:.5; cursor:default; }
   .row { display:flex; align-items:end; flex-wrap:wrap; gap:10px; }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
   .byok { border:1px solid var(--teal); border-radius:8px; padding:14px; margin-top:12px; background:rgba(57,197,207,.05); }
-  .byok .note { color:var(--teal); font-size:13px; margin:0 0 10px; }
-  .byok .note b { color:var(--fg); }
+  .byok .note { color:var(--teal); font-size:13px; margin:0 0 10px; } .byok .note b { color:var(--fg); }
+  .cors { color:var(--muted); font-size:12px; margin:10px 0 0; } .cors code { color:var(--accent); }
+  .cors b { color:var(--fg); }
+  .verify { margin:2px 0 4px; font-size:13px; }
+  .verify summary { cursor:pointer; color:var(--fg); font-weight:600; list-style:none;
+    display:inline-block; padding:6px 13px; border:1px solid var(--teal); border-radius:20px;
+    background:rgba(57,197,207,.10); }
+  .verify summary:hover { background:rgba(57,197,207,.18); }
+  .verify summary::-webkit-details-marker { display:none; }
+  .verify[open] summary { margin-bottom:8px; }
+  .verify p { color:var(--muted); margin:8px 0; } .verify a { color:var(--accent); }
+  .verify p b { color:var(--fg); }
+  .verify pre { background:#0d141d; border:1px solid var(--line); border-radius:6px; padding:10px; overflow:auto; font-size:12px; color:var(--fg); }
   .headline { display:flex; gap:28px; margin:16px 0 8px; }
   .metric b { font-size:26px; display:block; } .metric span { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
   .vuln b { color:var(--fail); }
@@ -39,8 +50,7 @@
   .card .prompt { margin:4px 0 8px; } .card .detail { color:var(--muted); font-size:13px; } .card .detail b { color:var(--fg); }
   .sev { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
   .sev.critical { color:var(--crit); } .sev.high { color:var(--high); } .sev.med { color:var(--med); }
-  .q { color:var(--muted); font-size:13px; }
-  .err { color:var(--fail); font-size:13px; margin-top:8px; }
+  .q { color:var(--muted); font-size:13px; } .err { color:var(--fail); font-size:13px; margin-top:8px; }
   .foot { color:var(--muted); font-size:12px; margin-top:26px; } .foot b { color:var(--fg); }
 </style>
 </head>
@@ -53,55 +63,77 @@
 <script type="text/babel">
 const { useState, useEffect } = React;
 const pct = x => (x * 100).toFixed(0) + "%";
+const GRADE_SRC = "https://github.com/egnaro9/crashkit/blob/main/crashkit/app.py";
 
-// --- client-side provider adapters: the browser calls the provider DIRECTLY.
-// The user's key goes ONLY to the provider host below, never to this server.
+// Providers. `shape` = the API format its adapter uses; the OpenAI-shaped ones
+// (xAI, Groq, OpenAI, custom) all route through one adapter, just with different
+// base URLs. Model lists are curated; a "custom…" option covers new/local models.
+const PROVIDERS = {
+  anthropic: { label: "Anthropic", shape: "anthropic", host: "api.anthropic.com",
+               models: ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-4-8", "claude-fable-5"] },
+  gemini:    { label: "Google Gemini", shape: "gemini", host: "generativelanguage.googleapis.com",
+               models: ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"] },
+  xai:       { label: "xAI (Grok)", shape: "openai", base: "https://api.x.ai/v1", host: "api.x.ai",
+               models: ["grok-4", "grok-4-fast", "grok-3", "grok-3-mini"] },
+  groq:      { label: "Groq (Llama, gpt-oss…)", shape: "openai", base: "https://api.groq.com/openai/v1", host: "api.groq.com",
+               models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b"] },
+  openai:    { label: "OpenAI (often blocks in-browser)", shape: "openai", base: "https://api.openai.com/v1", host: "api.openai.com",
+               models: ["gpt-4o-mini", "gpt-4o"] },
+  custom:    { label: "OpenAI-compatible / local / custom", shape: "openai", base: "", host: "the endpoint you set",
+               models: [], custom: true },
+};
+
+// --- client-side adapters: the browser calls the provider DIRECTLY. The key
+// goes ONLY to the provider host, never to this server.
 async function callProvider(cfg, prompt) {
-  if (cfg.provider === "anthropic") {
+  if (cfg.shape === "anthropic") {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": cfg.key,
-                 "anthropic-version": "2023-06-01",
-                 "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({ model: cfg.model, max_tokens: 256,
-                             messages: [{ role: "user", content: prompt }] }),
+                 "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model: cfg.model, max_tokens: 256, messages: [{ role: "user", content: prompt }] }),
     });
-    if (!r.ok) throw new Error("Anthropic " + r.status + " — " + (await r.text()).slice(0, 120));
-    const d = await r.json();
-    return (d.content || []).map(b => b.text || "").join("");
+    if (!r.ok) throw new Error("Anthropic " + r.status + " — " + (await r.text()).slice(0, 140));
+    return ((await r.json()).content || []).map(b => b.text || "").join("");
   }
-  // openai-compatible (OpenAI, Groq, Together, local, …)
-  const base = (cfg.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
+  if (cfg.shape === "gemini") {
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + cfg.model + ":generateContent", {
+      method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": cfg.key },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    });
+    if (!r.ok) throw new Error("Gemini " + r.status + " — " + (await r.text()).slice(0, 140));
+    return ((await r.json()).candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
+  }
+  const base = (cfg.base || "https://api.openai.com/v1").replace(/\/$/, "");
   const r = await fetch(base + "/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", "authorization": "Bearer " + cfg.key },
-    body: JSON.stringify({ model: cfg.model, max_tokens: 256,
-                           messages: [{ role: "user", content: prompt }] }),
+    method: "POST", headers: { "content-type": "application/json", "authorization": "Bearer " + cfg.key },
+    body: JSON.stringify({ model: cfg.model, max_tokens: 256, messages: [{ role: "user", content: prompt }] }),
   });
-  if (!r.ok) throw new Error("Provider " + r.status + " — " + (await r.text()).slice(0, 120));
-  const d = await r.json();
-  return d.choices[0].message.content;
+  if (!r.ok) throw new Error("Provider " + r.status + " — " + (await r.text()).slice(0, 140));
+  return (await r.json()).choices[0].message.content;
 }
 
 function App() {
   const [batteries, setBatteries] = useState([]);
   const [battery, setBattery] = useState("adversarial");
   const [model, setModel] = useState("");
-  const [byok, setByok] = useState({ provider: "openai", baseUrl: "", model: "gpt-4o-mini", key: "" });
+  const [byok, setByok] = useState({ provider: "anthropic", model: "claude-haiku-4-5", customModel: "", baseUrl: "", key: "" });
   const [run, setRun] = useState(null);
   const [board, setBoard] = useState([]);
-  const [status, setStatus] = useState("");
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState(""); const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
+  const [lastPayload, setLastPayload] = useState(null);
 
   const current = batteries.find(b => b.id === battery);
   const isByok = model === "__byok__";
+  const prov = PROVIDERS[byok.provider];
+  const effModel = (byok.model === "__custom__" ? byok.customModel : byok.model).trim();
+  const effBase = prov.custom ? byok.baseUrl.trim() : (prov.base || "");
+  const host = prov.custom ? (effBase ? new URL(effBase.startsWith("http") ? effBase : "https://" + effBase).host : "the endpoint you set") : prov.host;
   const loadBoard = () => fetch("/api/runs").then(r => r.json()).then(setBoard);
 
   useEffect(() => {
     fetch("/api/batteries").then(r => r.json()).then(bs => {
-      setBatteries(bs);
-      const b = bs.find(x => x.id === battery) || bs[0];
+      setBatteries(bs); const b = bs.find(x => x.id === battery) || bs[0];
       if (b) { setBattery(b.id); setModel(b.models[0]?.id || ""); }
     });
     loadBoard();
@@ -109,6 +141,7 @@ function App() {
 
   const onBattery = id => { setBattery(id); setRun(null); setErr("");
     const b = batteries.find(x => x.id === id); setModel(b?.models[0]?.id || ""); };
+  const onProvider = p => setByok({ ...byok, provider: p, model: PROVIDERS[p].models[0] || "__custom__", customModel: "" });
 
   const runMock = async () => {
     const r = await fetch("/api/run", { method: "POST", headers: { "content-type": "application/json" },
@@ -116,27 +149,26 @@ function App() {
     setRun(await r.json());
   };
 
-  // BYOK: fetch the prompts, call the provider client-side per prompt, POST only
-  // the ANSWERS back. The key is in `byok.key` (React state) and is never sent here.
   const runByok = async () => {
     const bat = await fetch("/api/battery/" + battery).then(r => r.json());
+    const cfg = { shape: prov.shape, base: effBase, model: effModel, key: byok.key.trim() };
     const answers = {};
     for (let i = 0; i < bat.tasks.length; i++) {
       setStatus(`Asking the model… ${i + 1}/${bat.tasks.length}`);
-      answers[bat.tasks[i].id] = await callProvider(byok, bat.tasks[i].prompt);
+      answers[bat.tasks[i].id] = await callProvider(cfg, bat.tasks[i].prompt);
     }
     setStatus("Grading…");
-    const label = byok.provider + ":" + byok.model;
+    const payload = { battery, model: byok.provider + ":" + effModel, answers };  // <- no key here
+    setLastPayload(payload);
     const r = await fetch("/api/grade", { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ battery, model: label, answers }) });   // <- no key in this body
+      body: JSON.stringify(payload) });
     setRun(await r.json());
   };
 
   const doRun = async () => {
     setBusy(true); setErr(""); setRun(null);
     try { isByok ? await runByok() : await runMock(); await loadBoard(); }
-    catch (e) { setErr(String(e.message || e)); }
-    finally { setBusy(false); setStatus(""); }
+    catch (e) { setErr(String(e.message || e)); } finally { setBusy(false); setStatus(""); }
   };
 
   const adversarial = battery === "adversarial";
@@ -145,49 +177,65 @@ function App() {
   return (
     <div className="wrap">
       <h1>AI Crash Test</h1>
-      <p className="sub">Point it at a model, run a battery, read the deterministic grades. No LLM
-        judge — every verdict is a predicate you can rerun. <code>Phase 2 · bring your own key</code></p>
+      <p className="sub">Point it at a model, run a battery, read the <b>deterministic grades</b>.
+        <b>No LLM judge</b> — every verdict is a <b>predicate you can rerun</b>.{" "}
+        <code>no signup · your key stays in your browser</code></p>
 
       <div className="panel">
         <div className="row">
-          <div>
-            <label>Battery</label>
+          <div><label>Battery</label>
             <select value={battery} onChange={e => onBattery(e.target.value)}>
               {batteries.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label>Crash-test dummy</label>
+            </select></div>
+          <div><label>Crash-test dummy</label>
             <select value={model} onChange={e => { setModel(e.target.value); setErr(""); }}>
               {(current?.models || []).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               <option value="__byok__">Bring your own key (real model)…</option>
-            </select>
-          </div>
-          <button onClick={doRun} disabled={busy || (isByok && !byok.key)}>
+            </select></div>
+          <button onClick={doRun} disabled={busy || (isByok && (!byok.key || !effModel))}>
             {busy ? (status || "Running…") : "Run the battery"}</button>
         </div>
 
         {isByok && (
           <div className="byok">
             <p className="note">🔒 <b>Your key never leaves this browser.</b> It's sent only to the
-              provider you pick below — never to this server. Open your Network tab and watch: the
-              only host that sees the key is the provider's.</p>
+              provider you pick — never to this server.</p>
+            <details className="verify">
+              <summary>Prove it — what does this server actually receive?</summary>
+              <p>Your key is sent only to <b>{host}</b>. Below is the entire request our server receives —
+                <b> there is no key field in it</b>. <b>Don't trust this panel</b>: open the{" "}
+                <b>Network tab</b> (your browser's own record — <b>we can't fake it</b>), and read the{" "}
+                <a href={GRADE_SRC} target="_blank" rel="noopener">open-source grade endpoint</a>, which
+                has <b>no key parameter</b>.</p>
+              <pre>{lastPayload
+                ? "POST /api/grade\n" + JSON.stringify({ ...lastPayload, answers: "{…answers…}" }, null, 2)
+                : "Run once — this shows the exact payload posted to our server (no key)."}</pre>
+            </details>
             <div className="grid">
               <div><label>Provider</label>
-                <select value={byok.provider} onChange={e => setByok({ ...byok, provider: e.target.value })}>
-                  <option value="openai">OpenAI-compatible</option>
-                  <option value="anthropic">Anthropic</option>
+                <select value={byok.provider} onChange={e => onProvider(e.target.value)}>
+                  {Object.entries(PROVIDERS).map(([id, p]) => <option key={id} value={id}>{p.label}</option>)}
                 </select></div>
               <div><label>Model</label>
-                <input value={byok.model} onChange={e => setByok({ ...byok, model: e.target.value })}
-                  placeholder="gpt-4o-mini / claude-haiku-4-5" /></div>
-              {byok.provider === "openai" && <div style={{gridColumn:"1 / -1"}}><label>Base URL (optional — for Groq, Together, local…)</label>
-                <input value={byok.baseUrl} onChange={e => setByok({ ...byok, baseUrl: e.target.value })}
-                  placeholder="https://api.openai.com/v1" /></div>}
+                <select value={byok.model} onChange={e => setByok({ ...byok, model: e.target.value })}>
+                  {prov.models.map(m => <option key={m} value={m}>{m}</option>)}
+                  <option value="__custom__">custom…</option>
+                </select></div>
+              {byok.model === "__custom__" && <div style={{gridColumn:"1 / -1"}}>
+                <label>Custom model id</label>
+                <input value={byok.customModel} onChange={e => setByok({ ...byok, customModel: e.target.value })} placeholder="model id" /></div>}
+              {prov.custom && <div style={{gridColumn:"1 / -1"}}>
+                <label>Base URL (Groq, Together, OpenRouter, a local server…)</label>
+                <input value={byok.baseUrl} onChange={e => setByok({ ...byok, baseUrl: e.target.value })} placeholder="https://api.openai.com/v1" /></div>}
               <div style={{gridColumn:"1 / -1"}}><label>API key (stays in this tab)</label>
-                <input type="password" value={byok.key} autoComplete="off"
+                <input type="password" autoComplete="off" value={byok.key}
                   onChange={e => setByok({ ...byok, key: e.target.value })} placeholder="sk-…" /></div>
             </div>
+            <p className="cors">The key goes only to <code>{host}</code>. Browser-callability depends on
+              the provider: <b>Anthropic and Gemini work directly</b>; xAI/Groq/local usually do;
+              <b> OpenAI's own API often blocks browser calls (CORS)</b>. If a call CORS-errors, that
+              provider can't run never-touches from a browser — use a host that allows it (e.g. Groq) or a
+              local server.</p>
           </div>
         )}
 
@@ -224,24 +272,21 @@ function App() {
           <thead><tr><th>Model</th><th>Vulnerability</th><th>Accuracy</th><th>Source</th></tr></thead>
           <tbody>
             {board.length === 0 && <tr><td colSpan="4" className="q">No runs yet — run one above.</td></tr>}
-            {board.map(r => (
-              <tr key={r.id}>
-                <td>{r.model}</td>
-                <td style={{color: r.vulnerability > 0 ? "var(--fail)" : "var(--muted)"}}>{r.vulnerability == null ? "—" : pct(r.vulnerability)}</td>
-                <td>{pct(r.accuracy)}</td>
-                <td className="q">{r.source}</td>
-              </tr>))}
+            {board.map(r => (<tr key={r.id}>
+              <td>{r.model}</td>
+              <td style={{color: r.vulnerability > 0 ? "var(--fail)" : "var(--muted)"}}>{r.vulnerability == null ? "—" : pct(r.vulnerability)}</td>
+              <td>{pct(r.accuracy)}</td><td className="q">{r.source}</td></tr>))}
           </tbody>
         </table>
       </div>
 
-      <p className="foot">One engine, two lenses: shares its deterministic grader core (<b>gradecore</b>)
-        with <b>model-drift</b>, the longitudinal board. Real-model runs never send your key here —
-        the browser calls the provider and posts only the answers to grade.</p>
+      <p className="foot"><b>One engine, two lenses</b>: shares its <b>deterministic grader core</b>
+        (<b>gradecore</b>) with <b>model-drift</b>, the longitudinal board. Real-model runs
+        <b> never send your key here</b> — the browser calls the provider and posts
+        <b> only the answers</b> to grade.</p>
     </div>
   );
 }
-
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 </script>
 </body>
