@@ -1,13 +1,15 @@
-"""The crash-test playground + leaderboard API (Phase 0, mock-only).
+"""The crash-test playground + leaderboard API (Phase 1, mock-only).
 
-    POST /api/run     {model}   -> run the battery, grade via gradecore, store, return
-    GET  /api/models             -> the runnable models (mock-only in Phase 0)
-    GET  /api/runs               -> leaderboard (worst accuracy first)
+    GET  /api/batteries          -> the batteries and their runnable models
+    GET  /api/models             -> every model (flat) — back-compat
+    POST /api/run   {model,battery} -> run, grade via gradecore, store, return
+    GET  /api/runs               -> leaderboard (most vulnerable first)
     GET  /api/runs/{id}          -> one run with its per-task verdicts
     GET  /                       -> the static playground
 
-Fully offline: the only models are the deterministic mocks, so there are no keys
-and no live inference. BYOK + real providers land in Phase 1.
+Two batteries: the model-drift correctness **suite**, and the **adversarial**
+crash-test. Still mock-only — no keys, no live inference. BYOK real providers
+are the next step.
 """
 from __future__ import annotations
 
@@ -19,23 +21,48 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from modeldrift.providers import Model
+from modeldrift.providers import Model, call_meta
 
 from . import run as run_battery
 from . import to_eval_run
+from .adversarial import BATTERY as ADVERSARIAL_BATTERY
+from .adversarial import mock_transport
+from .battery import modeldrift_battery
 from .store import RunStore
 
-# Phase 0 is mock-only: two deterministic controls, no keys.
-_MODELS = {
-    "mock:stable": Model("mock:stable", "Mock (stable)", "mock", "mock", "NONE"),
-    "mock:drifted": Model("mock:drifted", "Mock (drifted)", "mock", "mock-drifted", "NONE"),
+
+def _mock(mid: str, label: str, profile: str) -> Model:
+    return Model(mid, label, "mock", profile, "NONE")
+
+
+# A battery bundles its tasks, its transport, and the mock models that run it.
+_BATTERIES = {
+    "suite": {
+        "label": "Correctness suite (model-drift)",
+        "tasks": modeldrift_battery,
+        "transport": call_meta,
+        "models": {
+            "mock:stable": _mock("mock:stable", "Mock (stable)", "mock"),
+            "mock:drifted": _mock("mock:drifted", "Mock (drifted)", "mock-drifted"),
+        },
+    },
+    "adversarial": {
+        "label": "Adversarial crash-test",
+        "tasks": lambda: ADVERSARIAL_BATTERY,
+        "transport": mock_transport,
+        "models": {
+            "mock:safe": _mock("mock:safe", "Mock (safe)", "safe"),
+            "mock:vulnerable": _mock("mock:vulnerable", "Mock (vulnerable)", "vulnerable"),
+        },
+    },
 }
 
 _FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 
 
 class RunRequest(BaseModel):
-    model: str = Field(description="a model id from GET /api/models")
+    model: str = Field(description="a model id from GET /api/batteries")
+    battery: str = Field(default="suite", description="'suite' or 'adversarial'")
 
 
 def create_app(store: Optional[RunStore] = None) -> FastAPI:
@@ -43,16 +70,30 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
                   summary="AI crash-test — deterministic grading, no LLM judge.")
     app.state.store = store or RunStore(os.environ.get("CRASHKIT_DB", ":memory:"))
 
+    @app.get("/api/batteries")
+    def batteries() -> list[dict]:
+        return [
+            {"id": bid, "label": b["label"],
+             "models": [{"id": mid, "name": mm.label} for mid, mm in b["models"].items()]}
+            for bid, b in _BATTERIES.items()
+        ]
+
     @app.get("/api/models")
     def models() -> list[dict]:
-        return [{"id": mid, "name": m.label} for mid, m in _MODELS.items()]
+        return [{"id": mid, "name": mm.label, "battery": bid}
+                for bid, b in _BATTERIES.items() for mid, mm in b["models"].items()]
 
     @app.post("/api/run")
     def do_run(body: RunRequest) -> dict:
-        m = _MODELS.get(body.model)
-        if m is None:
-            raise HTTPException(status_code=404, detail=f"unknown model {body.model!r}")
-        eval_run = to_eval_run(run_battery(m))
+        battery = _BATTERIES.get(body.battery)
+        if battery is None:
+            raise HTTPException(status_code=404, detail=f"unknown battery {body.battery!r}")
+        model = battery["models"].get(body.model)
+        if model is None:
+            raise HTTPException(status_code=404,
+                                detail=f"model {body.model!r} not in battery {body.battery!r}")
+        eval_run = to_eval_run(
+            run_battery(model, battery["tasks"](), transport=battery["transport"]))
         run_id = app.state.store.add(eval_run)
         return {"id": run_id, **eval_run}
 

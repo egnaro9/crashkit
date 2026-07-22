@@ -20,8 +20,9 @@ CREATE TABLE IF NOT EXISTS runs (
     model        TEXT NOT NULL,
     source       TEXT NOT NULL,
     battery_hash TEXT NOT NULL,
-    accuracy     REAL NOT NULL,
-    reliability  REAL,
+    accuracy      REAL NOT NULL,
+    vulnerability REAL,
+    reliability   REAL,
     created_at   TEXT NOT NULL,
     eval_run     TEXT NOT NULL          -- the full eval_run.json blob
 );
@@ -60,21 +61,26 @@ class RunStore:
         with closing(self._connect()) as c:
             c.execute(
                 "INSERT INTO runs (id, model, source, battery_hash, accuracy, "
-                "reliability, created_at, eval_run) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "vulnerability, reliability, created_at, eval_run) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (rid, eval_run.get("run", ""), eval_run.get("source", "crash_test"),
                  eval_run.get("git_sha", ""), float(m.get("faithfulness", 0.0)),
-                 m.get("reliability"), _utcnow(), json.dumps(eval_run)),
+                 m.get("vulnerability_score"), m.get("reliability"),
+                 _utcnow(), json.dumps(eval_run)),
             )
             c.commit()
         return rid
 
     def leaderboard(self, limit: int = 50) -> List[dict]:
-        """One row per run, worst accuracy first — the crash-test view is 'what
-        broke', so the most-vulnerable sit on top."""
+        """One row per run, most-vulnerable first — the crash-test view is 'what
+        broke', so the highest weighted vulnerability (then lowest accuracy) is
+        on top."""
         with closing(self._connect()) as c:
             rows = c.execute(
-                "SELECT id, model, source, battery_hash, accuracy, reliability, created_at "
-                "FROM runs ORDER BY accuracy ASC, created_at DESC LIMIT ?", (limit,),
+                "SELECT id, model, source, battery_hash, accuracy, vulnerability, "
+                "reliability, created_at FROM runs "
+                "ORDER BY COALESCE(vulnerability, 0) DESC, accuracy ASC, created_at DESC "
+                "LIMIT ?", (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
 

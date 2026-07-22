@@ -6,26 +6,26 @@
 <title>AI Crash Test</title>
 <style>
   :root { --bg:#0b0f14; --panel:#111823; --line:#1f2a37; --fg:#e6edf3; --muted:#8899a6;
-          --pass:#3fb950; --fail:#f85149; --amber:#d29922; --accent:#58a6ff; }
+          --pass:#3fb950; --fail:#f85149; --amber:#d29922; --accent:#58a6ff;
+          --crit:#f85149; --high:#f0883e; --med:#d29922; --low:#8899a6; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg);
          font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  .wrap { max-width:900px; margin:0 auto; padding:28px 20px 60px; }
+  .wrap { max-width:920px; margin:0 auto; padding:28px 20px 60px; }
   h1 { font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
   .sub { color:var(--muted); margin:0 0 24px; }
   .sub code { color:var(--accent); }
-  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px;
-           padding:18px; margin-bottom:20px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:20px; }
   label { color:var(--muted); font-size:13px; display:block; margin-bottom:6px; }
   select, button { font:inherit; border-radius:7px; border:1px solid var(--line); }
-  select { background:#0d141d; color:var(--fg); padding:9px 12px; min-width:200px; }
-  button { background:var(--accent); color:#08111f; border:none; padding:10px 18px;
-           font-weight:600; cursor:pointer; margin-left:10px; }
+  select { background:#0d141d; color:var(--fg); padding:9px 12px; min-width:190px; }
+  button { background:var(--accent); color:#08111f; border:none; padding:10px 18px; font-weight:600; cursor:pointer; }
   button:disabled { opacity:.5; cursor:default; }
-  .row { display:flex; align-items:end; flex-wrap:wrap; gap:8px; }
-  .headline { display:flex; gap:28px; margin:14px 0 6px; }
-  .metric b { font-size:24px; display:block; }
+  .row { display:flex; align-items:end; flex-wrap:wrap; gap:10px; }
+  .headline { display:flex; gap:28px; margin:16px 0 8px; }
+  .metric b { font-size:26px; display:block; }
   .metric span { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .vuln b { color:var(--fail); }
   table { width:100%; border-collapse:collapse; font-size:14px; }
   th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
   th { color:var(--muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
@@ -33,6 +33,15 @@
   .tag.pass { background:rgba(63,185,80,.15); color:var(--pass); }
   .tag.fail { background:rgba(248,81,73,.15); color:var(--fail); }
   .tag.trunc { background:rgba(210,153,34,.15); color:var(--amber); }
+  .card { border:1px solid var(--line); border-left-width:3px; border-radius:8px; padding:12px 14px; margin:10px 0; }
+  .card.critical { border-left-color:var(--crit); } .card.high { border-left-color:var(--high); }
+  .card.med { border-left-color:var(--med); } .card.low { border-left-color:var(--low); }
+  .card .kind { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .card .prompt { margin:4px 0 8px; }
+  .card .detail { color:var(--muted); font-size:13px; }
+  .card .detail b { color:var(--fg); }
+  .sev { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+  .sev.critical { color:var(--crit); } .sev.high { color:var(--high); } .sev.med { color:var(--med); }
   .q { color:var(--muted); font-size:13px; }
   .foot { color:var(--muted); font-size:12px; margin-top:26px; }
   .foot b { color:var(--fg); }
@@ -46,43 +55,62 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script type="text/babel">
 const { useState, useEffect } = React;
-
-function pct(x) { return (x * 100).toFixed(0) + "%"; }
+const pct = x => (x * 100).toFixed(0) + "%";
 
 function App() {
-  const [models, setModels] = useState([]);
+  const [batteries, setBatteries] = useState([]);
+  const [battery, setBattery] = useState("adversarial");
   const [model, setModel] = useState("");
   const [run, setRun] = useState(null);
   const [board, setBoard] = useState([]);
   const [busy, setBusy] = useState(false);
 
+  const current = batteries.find(b => b.id === battery);
   const loadBoard = () => fetch("/api/runs").then(r => r.json()).then(setBoard);
+
   useEffect(() => {
-    fetch("/api/models").then(r => r.json()).then(m => { setModels(m); if (m[0]) setModel(m[0].id); });
+    fetch("/api/batteries").then(r => r.json()).then(bs => {
+      setBatteries(bs);
+      const b = bs.find(x => x.id === battery) || bs[0];
+      if (b) { setBattery(b.id); setModel(b.models[0]?.id || ""); }
+    });
     loadBoard();
   }, []);
+
+  const onBattery = id => {
+    setBattery(id); setRun(null);
+    const b = batteries.find(x => x.id === id);
+    setModel(b?.models[0]?.id || "");
+  };
 
   const doRun = async () => {
     setBusy(true);
     const r = await fetch("/api/run", { method: "POST",
-      headers: { "content-type": "application/json" }, body: JSON.stringify({ model }) });
-    setRun(await r.json());
-    await loadBoard();
-    setBusy(false);
+      headers: { "content-type": "application/json" }, body: JSON.stringify({ model, battery }) });
+    setRun(await r.json()); await loadBoard(); setBusy(false);
   };
+
+  const adversarial = battery === "adversarial";
+  const fails = run ? run.cases.filter(c => c.flagged) : [];
 
   return (
     <div className="wrap">
       <h1>AI Crash Test</h1>
-      <p className="sub">Point it at a model, run the battery, read the deterministic grades.
-        No LLM judge — every verdict is a predicate you can rerun. <code>Phase 0 · mock only</code></p>
+      <p className="sub">Point it at a model, run a battery, read the deterministic grades. No LLM
+        judge — every verdict is a predicate you can rerun. <code>Phase 1 · mock only</code></p>
 
       <div className="panel">
         <div className="row">
           <div>
+            <label>Battery</label>
+            <select value={battery} onChange={e => onBattery(e.target.value)}>
+              {batteries.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
+            </select>
+          </div>
+          <div>
             <label>Crash-test dummy</label>
             <select value={model} onChange={e => setModel(e.target.value)}>
-              {models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              {(current?.models || []).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
           <button onClick={doRun} disabled={busy || !model}>{busy ? "Running…" : "Run the battery"}</button>
@@ -91,29 +119,33 @@ function App() {
         {run && (
           <div>
             <div className="headline">
-              <div className="metric"><b>{pct(run.metrics.faithfulness)}</b><span>accuracy</span></div>
-              <div className="metric"><b>{pct(run.metrics.reliability ?? 1)}</b><span>reliability</span></div>
+              {adversarial && <div className="metric vuln"><b>{pct(run.metrics.vulnerability_score || 0)}</b><span>vulnerability</span></div>}
+              <div className="metric"><b>{pct(run.metrics.faithfulness)}</b><span>{adversarial ? "resisted" : "accuracy"}</span></div>
               <div className="metric"><b>{run.metrics.flagged_cases}</b><span>failures</span></div>
             </div>
-            <table>
-              <thead><tr><th>Task</th><th>Kind</th><th>Verdict</th></tr></thead>
-              <tbody>
-                {run.cases.map((c, i) => {
-                  const trunc = c.note.includes("truncated");
-                  return (
-                    <tr key={i}>
-                      <td className="q">{c.q.slice(0, 64)}</td>
-                      <td className="q">{c.note.split(" · ")[0]}</td>
-                      <td>
-                        {trunc ? <span className="tag trunc">truncated</span>
-                          : c.flagged ? <span className="tag fail">fail</span>
-                          : <span className="tag pass">pass</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+
+            {run.per_kind && (
+              <table>
+                <thead><tr><th>Attack kind</th><th>Resisted</th></tr></thead>
+                <tbody>{Object.entries(run.per_kind).map(([k, v]) =>
+                  <tr key={k}><td>{k}</td><td style={{color: v < 1 ? "var(--fail)" : "var(--pass)"}}>{pct(v)}</td></tr>)}
+                </tbody>
+              </table>
+            )}
+
+            {fails.length > 0 && <div style={{marginTop:14}}>
+              <label>Caught vulnerabilities</label>
+              {fails.map((c, i) => {
+                const sev = (c.severity || "med");
+                return (
+                  <div className={"card " + sev} key={i}>
+                    <div className="kind">{c.note.split(" · ")[0]} · <span className={"sev " + sev}>{sev}</span></div>
+                    <div className="prompt">{c.q.replace(/^\[[^\]]+\]\s*/, "")}</div>
+                    <div className="detail">{c.detail} · <b>{c.grader}</b></div>
+                  </div>
+                );
+              })}
+            </div>}
           </div>
         )}
       </div>
@@ -121,14 +153,14 @@ function App() {
       <div className="panel">
         <label>Leaderboard — most vulnerable first</label>
         <table>
-          <thead><tr><th>Model</th><th>Accuracy</th><th>Reliability</th><th>Source</th></tr></thead>
+          <thead><tr><th>Model</th><th>Vulnerability</th><th>Accuracy</th><th>Battery</th></tr></thead>
           <tbody>
             {board.length === 0 && <tr><td colSpan="4" className="q">No runs yet — run one above.</td></tr>}
             {board.map(r => (
               <tr key={r.id}>
                 <td>{r.model}</td>
+                <td style={{color: r.vulnerability > 0 ? "var(--fail)" : "var(--muted)"}}>{r.vulnerability == null ? "—" : pct(r.vulnerability)}</td>
                 <td>{pct(r.accuracy)}</td>
-                <td>{r.reliability == null ? "—" : pct(r.reliability)}</td>
                 <td className="q">{r.source}</td>
               </tr>
             ))}
@@ -137,8 +169,8 @@ function App() {
       </div>
 
       <p className="foot">One engine, two lenses: this shares its deterministic grader core
-        (<b>gradecore</b>) with <b>model-drift</b>, the longitudinal board. Crash-test runs are
-        tagged <b>crash_test</b> and kept off model-drift's pristine data.</p>
+        (<b>gradecore</b>) with <b>model-drift</b>, the longitudinal board. Crash-test runs are tagged
+        <b> crash_test</b> and kept off model-drift's pristine data.</p>
     </div>
   );
 }
