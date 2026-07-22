@@ -6,25 +6,45 @@ answer. The adversarial, on-demand counterpart to
 [model-drift](https://github.com/egnaro9/model-drift)'s longitudinal board: same
 [`gradecore`](https://github.com/egnaro9/gradecore) engine, two lenses.
 
-> **Phase 0 — the interactive slice.** Mock-only and fully offline: the runnable
-> dummies are model-drift's two deterministic mocks, so there are no keys and no
-> live inference. Real providers (bring-your-own-key, so a visitor's key never
-> touches the server) and the net-new adversarial batteries land in Phase 1.
+Two batteries — a correctness **suite** (reused from model-drift) and an
+**adversarial** crash-test (injection, tool-abuse, unsafe-compliance,
+hallucination-bait, …) scored by a **severity-weighted vulnerability score**.
+Run the mocks with no key, or bring your own to test a real model.
 
 ## Run it
 
 ```bash
 pip install -e ../gradecore -e ../model-drift -e ".[dev]"   # the shared engine + reused suite
 uvicorn crashkit.app:app --port 8011
-# open http://localhost:8011  — pick a dummy, hit "Run the battery"
+# open http://localhost:8011  — pick a battery + dummy, hit "Run the battery"
 ```
 
 ```
-POST /api/run   {model}   run the battery, grade via gradecore, store, return
-GET  /api/models          the runnable models (mock-only in Phase 0)
-GET  /api/runs            leaderboard — most vulnerable first
-GET  /api/runs/{id}       one run with its per-task verdicts
+GET  /api/batteries        the batteries and their runnable models
+POST /api/run   {model,battery}   run a mock model server-side, grade, store
+GET  /api/battery/{id}     the battery's prompts (for BYOK, see below)
+POST /api/grade {battery,model,answers}   grade answers the browser fetched — NO key field
+GET  /api/runs             leaderboard — most vulnerable first
+GET  /api/runs/{id}        one run with its per-task verdicts
 ```
+
+## Bring your own key — the key never touches the server
+
+Testing a real model is **never-touches** by construction: the **browser** calls
+the provider directly with your key and posts crashkit only the *answers*
+(grading needs no key). Pick "Bring your own key" in the playground, and:
+
+```
+browser ──(your key)──▶ api.openai.com / api.anthropic.com     ← the ONLY host that sees the key
+   │
+   └──(answers only, no key)──▶  POST /api/grade  ──▶  gradecore  ──▶  leaderboard
+```
+
+`POST /api/grade` has **no key field** — the server structurally cannot receive
+one (a test asserts a stray key is dropped and never stored). The guarantee is
+verifiable, not asserted: open the Network tab and watch where the key goes.
+Supports OpenAI-compatible endpoints (OpenAI, Groq, Together, local — via base
+URL) and Anthropic.
 
 ## How it fits together
 

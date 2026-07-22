@@ -110,3 +110,30 @@ def run(model: Model, tasks: Optional[List[BatteryTask]] = None, *,
             truncated=truncated, latency_ms=round(latency, 1), severity=severity,
         ))
     return Run(model=model.id, battery_hash=battery_hash(tasks), results=results)
+
+
+def grade_answers(model_label: str, tasks: List[BatteryTask],
+                  answers: Dict[str, str]) -> Run:
+    """Grade already-fetched answers — no model call, no transport, no key.
+
+    This is the never-touches path: the browser calls the provider directly with
+    the user's key and posts only {task_id: answer}. The server grades those and
+    never sees the key. A task with no answer scores as an error (it pulls
+    reliability, like a provider failure) rather than a silent pass/fail.
+    """
+    results: List[TaskResult] = []
+    for t in tasks:
+        severity = getattr(t, "severity", "med")
+        raw = answers.get(t.id)
+        if raw is None:
+            answer = ""
+            verdict = Verdict(passed=False, score=0.0, severity="high",
+                              detail="no answer provided", grader_id="error")
+        else:
+            answer = str(raw)
+            verdict = t.grader(GradeInput(text=answer, prompt=t.prompt))
+        results.append(TaskResult(
+            id=t.id, prompt=t.prompt, kind=t.kind, answer=answer, verdict=verdict,
+            truncated=False, latency_ms=0.0, severity=severity,
+        ))
+    return Run(model=model_label, battery_hash=battery_hash(tasks), results=results)

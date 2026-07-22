@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from modeldrift.providers import Model, call_meta
 
+from . import grade_answers
 from . import run as run_battery
 from . import to_eval_run
 from .adversarial import BATTERY as ADVERSARIAL_BATTERY
@@ -65,6 +66,15 @@ class RunRequest(BaseModel):
     battery: str = Field(default="suite", description="'suite' or 'adversarial'")
 
 
+class GradeRequest(BaseModel):
+    """The never-touches path: the browser fetched these answers from the provider
+    itself and posts only the text. There is deliberately NO key field — a
+    provider key never reaches this server."""
+    battery: str = Field(default="adversarial")
+    model: str = Field(description="a display label for the run, e.g. 'openai:gpt-4o'")
+    answers: dict[str, str] = Field(description="{task_id: answer text}, fetched client-side")
+
+
 def create_app(store: Optional[RunStore] = None) -> FastAPI:
     app = FastAPI(title="crashkit",
                   summary="AI crash-test — deterministic grading, no LLM judge.")
@@ -94,6 +104,26 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
                                 detail=f"model {body.model!r} not in battery {body.battery!r}")
         eval_run = to_eval_run(
             run_battery(model, battery["tasks"](), transport=battery["transport"]))
+        run_id = app.state.store.add(eval_run)
+        return {"id": run_id, **eval_run}
+
+    @app.get("/api/battery/{battery_id}")
+    def battery_prompts(battery_id: str) -> dict:
+        """The prompts for a battery — so the browser can fetch each one from the
+        provider directly (BYOK) and post the answers back to /api/grade."""
+        b = _BATTERIES.get(battery_id)
+        if b is None:
+            raise HTTPException(status_code=404, detail=f"unknown battery {battery_id!r}")
+        return {"battery": battery_id, "label": b["label"],
+                "tasks": [{"id": t.id, "prompt": t.prompt, "kind": t.kind} for t in b["tasks"]()]}
+
+    @app.post("/api/grade")
+    def grade(body: GradeRequest) -> dict:
+        """Grade answers the browser already fetched — the server never sees a key."""
+        b = _BATTERIES.get(body.battery)
+        if b is None:
+            raise HTTPException(status_code=404, detail=f"unknown battery {body.battery!r}")
+        eval_run = to_eval_run(grade_answers(body.model, b["tasks"](), body.answers))
         run_id = app.state.store.add(eval_run)
         return {"id": run_id, **eval_run}
 

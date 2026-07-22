@@ -13,13 +13,13 @@ from .adversarial import (
     mock_transport,
 )
 from .battery import BatteryTask, battery_hash, modeldrift_battery
-from .runner import SEVERITY_WEIGHT, Run, TaskResult, run
+from .runner import SEVERITY_WEIGHT, Run, TaskResult, grade_answers, run
 from .serialize import to_eval_run
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "BatteryTask", "modeldrift_battery", "battery_hash",
     "AdversarialTask", "ADVERSARIAL_BATTERY", "CRASHTEST_VERSION", "mock_transport",
-    "Run", "TaskResult", "run", "SEVERITY_WEIGHT", "to_eval_run",
+    "Run", "TaskResult", "run", "grade_answers", "SEVERITY_WEIGHT", "to_eval_run",
 ]

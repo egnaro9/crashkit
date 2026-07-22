@@ -6,45 +6,42 @@
 <title>AI Crash Test</title>
 <style>
   :root { --bg:#0b0f14; --panel:#111823; --line:#1f2a37; --fg:#e6edf3; --muted:#8899a6;
-          --pass:#3fb950; --fail:#f85149; --amber:#d29922; --accent:#58a6ff;
+          --pass:#3fb950; --fail:#f85149; --amber:#d29922; --accent:#58a6ff; --teal:#39c5cf;
           --crit:#f85149; --high:#f0883e; --med:#d29922; --low:#8899a6; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg);
          font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
   .wrap { max-width:920px; margin:0 auto; padding:28px 20px 60px; }
   h1 { font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
-  .sub { color:var(--muted); margin:0 0 24px; }
-  .sub code { color:var(--accent); }
+  .sub { color:var(--muted); margin:0 0 24px; } .sub code { color:var(--accent); }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:20px; }
   label { color:var(--muted); font-size:13px; display:block; margin-bottom:6px; }
-  select, button { font:inherit; border-radius:7px; border:1px solid var(--line); }
-  select { background:#0d141d; color:var(--fg); padding:9px 12px; min-width:190px; }
+  select, button, input { font:inherit; border-radius:7px; border:1px solid var(--line); }
+  select, input { background:#0d141d; color:var(--fg); padding:9px 12px; }
+  input { width:100%; }
   button { background:var(--accent); color:#08111f; border:none; padding:10px 18px; font-weight:600; cursor:pointer; }
   button:disabled { opacity:.5; cursor:default; }
   .row { display:flex; align-items:end; flex-wrap:wrap; gap:10px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .byok { border:1px solid var(--teal); border-radius:8px; padding:14px; margin-top:12px; background:rgba(57,197,207,.05); }
+  .byok .note { color:var(--teal); font-size:13px; margin:0 0 10px; }
+  .byok .note b { color:var(--fg); }
   .headline { display:flex; gap:28px; margin:16px 0 8px; }
-  .metric b { font-size:26px; display:block; }
-  .metric span { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .metric b { font-size:26px; display:block; } .metric span { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
   .vuln b { color:var(--fail); }
   table { width:100%; border-collapse:collapse; font-size:14px; }
   th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
   th { color:var(--muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
-  .tag { font-size:12px; padding:2px 8px; border-radius:20px; font-weight:600; }
-  .tag.pass { background:rgba(63,185,80,.15); color:var(--pass); }
-  .tag.fail { background:rgba(248,81,73,.15); color:var(--fail); }
-  .tag.trunc { background:rgba(210,153,34,.15); color:var(--amber); }
   .card { border:1px solid var(--line); border-left-width:3px; border-radius:8px; padding:12px 14px; margin:10px 0; }
   .card.critical { border-left-color:var(--crit); } .card.high { border-left-color:var(--high); }
   .card.med { border-left-color:var(--med); } .card.low { border-left-color:var(--low); }
   .card .kind { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
-  .card .prompt { margin:4px 0 8px; }
-  .card .detail { color:var(--muted); font-size:13px; }
-  .card .detail b { color:var(--fg); }
+  .card .prompt { margin:4px 0 8px; } .card .detail { color:var(--muted); font-size:13px; } .card .detail b { color:var(--fg); }
   .sev { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
   .sev.critical { color:var(--crit); } .sev.high { color:var(--high); } .sev.med { color:var(--med); }
   .q { color:var(--muted); font-size:13px; }
-  .foot { color:var(--muted); font-size:12px; margin-top:26px; }
-  .foot b { color:var(--fg); }
+  .err { color:var(--fail); font-size:13px; margin-top:8px; }
+  .foot { color:var(--muted); font-size:12px; margin-top:26px; } .foot b { color:var(--fg); }
 </style>
 </head>
 <body>
@@ -57,15 +54,48 @@
 const { useState, useEffect } = React;
 const pct = x => (x * 100).toFixed(0) + "%";
 
+// --- client-side provider adapters: the browser calls the provider DIRECTLY.
+// The user's key goes ONLY to the provider host below, never to this server.
+async function callProvider(cfg, prompt) {
+  if (cfg.provider === "anthropic") {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": cfg.key,
+                 "anthropic-version": "2023-06-01",
+                 "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model: cfg.model, max_tokens: 256,
+                             messages: [{ role: "user", content: prompt }] }),
+    });
+    if (!r.ok) throw new Error("Anthropic " + r.status + " — " + (await r.text()).slice(0, 120));
+    const d = await r.json();
+    return (d.content || []).map(b => b.text || "").join("");
+  }
+  // openai-compatible (OpenAI, Groq, Together, local, …)
+  const base = (cfg.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
+  const r = await fetch(base + "/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", "authorization": "Bearer " + cfg.key },
+    body: JSON.stringify({ model: cfg.model, max_tokens: 256,
+                           messages: [{ role: "user", content: prompt }] }),
+  });
+  if (!r.ok) throw new Error("Provider " + r.status + " — " + (await r.text()).slice(0, 120));
+  const d = await r.json();
+  return d.choices[0].message.content;
+}
+
 function App() {
   const [batteries, setBatteries] = useState([]);
   const [battery, setBattery] = useState("adversarial");
   const [model, setModel] = useState("");
+  const [byok, setByok] = useState({ provider: "openai", baseUrl: "", model: "gpt-4o-mini", key: "" });
   const [run, setRun] = useState(null);
   const [board, setBoard] = useState([]);
+  const [status, setStatus] = useState("");
+  const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   const current = batteries.find(b => b.id === battery);
+  const isByok = model === "__byok__";
   const loadBoard = () => fetch("/api/runs").then(r => r.json()).then(setBoard);
 
   useEffect(() => {
@@ -77,17 +107,36 @@ function App() {
     loadBoard();
   }, []);
 
-  const onBattery = id => {
-    setBattery(id); setRun(null);
-    const b = batteries.find(x => x.id === id);
-    setModel(b?.models[0]?.id || "");
+  const onBattery = id => { setBattery(id); setRun(null); setErr("");
+    const b = batteries.find(x => x.id === id); setModel(b?.models[0]?.id || ""); };
+
+  const runMock = async () => {
+    const r = await fetch("/api/run", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model, battery }) });
+    setRun(await r.json());
+  };
+
+  // BYOK: fetch the prompts, call the provider client-side per prompt, POST only
+  // the ANSWERS back. The key is in `byok.key` (React state) and is never sent here.
+  const runByok = async () => {
+    const bat = await fetch("/api/battery/" + battery).then(r => r.json());
+    const answers = {};
+    for (let i = 0; i < bat.tasks.length; i++) {
+      setStatus(`Asking the model… ${i + 1}/${bat.tasks.length}`);
+      answers[bat.tasks[i].id] = await callProvider(byok, bat.tasks[i].prompt);
+    }
+    setStatus("Grading…");
+    const label = byok.provider + ":" + byok.model;
+    const r = await fetch("/api/grade", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ battery, model: label, answers }) });   // <- no key in this body
+    setRun(await r.json());
   };
 
   const doRun = async () => {
-    setBusy(true);
-    const r = await fetch("/api/run", { method: "POST",
-      headers: { "content-type": "application/json" }, body: JSON.stringify({ model, battery }) });
-    setRun(await r.json()); await loadBoard(); setBusy(false);
+    setBusy(true); setErr(""); setRun(null);
+    try { isByok ? await runByok() : await runMock(); await loadBoard(); }
+    catch (e) { setErr(String(e.message || e)); }
+    finally { setBusy(false); setStatus(""); }
   };
 
   const adversarial = battery === "adversarial";
@@ -97,7 +146,7 @@ function App() {
     <div className="wrap">
       <h1>AI Crash Test</h1>
       <p className="sub">Point it at a model, run a battery, read the deterministic grades. No LLM
-        judge — every verdict is a predicate you can rerun. <code>Phase 1 · mock only</code></p>
+        judge — every verdict is a predicate you can rerun. <code>Phase 2 · bring your own key</code></p>
 
       <div className="panel">
         <div className="row">
@@ -109,12 +158,40 @@ function App() {
           </div>
           <div>
             <label>Crash-test dummy</label>
-            <select value={model} onChange={e => setModel(e.target.value)}>
+            <select value={model} onChange={e => { setModel(e.target.value); setErr(""); }}>
               {(current?.models || []).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              <option value="__byok__">Bring your own key (real model)…</option>
             </select>
           </div>
-          <button onClick={doRun} disabled={busy || !model}>{busy ? "Running…" : "Run the battery"}</button>
+          <button onClick={doRun} disabled={busy || (isByok && !byok.key)}>
+            {busy ? (status || "Running…") : "Run the battery"}</button>
         </div>
+
+        {isByok && (
+          <div className="byok">
+            <p className="note">🔒 <b>Your key never leaves this browser.</b> It's sent only to the
+              provider you pick below — never to this server. Open your Network tab and watch: the
+              only host that sees the key is the provider's.</p>
+            <div className="grid">
+              <div><label>Provider</label>
+                <select value={byok.provider} onChange={e => setByok({ ...byok, provider: e.target.value })}>
+                  <option value="openai">OpenAI-compatible</option>
+                  <option value="anthropic">Anthropic</option>
+                </select></div>
+              <div><label>Model</label>
+                <input value={byok.model} onChange={e => setByok({ ...byok, model: e.target.value })}
+                  placeholder="gpt-4o-mini / claude-haiku-4-5" /></div>
+              {byok.provider === "openai" && <div style={{gridColumn:"1 / -1"}}><label>Base URL (optional — for Groq, Together, local…)</label>
+                <input value={byok.baseUrl} onChange={e => setByok({ ...byok, baseUrl: e.target.value })}
+                  placeholder="https://api.openai.com/v1" /></div>}
+              <div style={{gridColumn:"1 / -1"}}><label>API key (stays in this tab)</label>
+                <input type="password" value={byok.key} autoComplete="off"
+                  onChange={e => setByok({ ...byok, key: e.target.value })} placeholder="sk-…" /></div>
+            </div>
+          </div>
+        )}
+
+        {err && <div className="err">⚠ {err}</div>}
 
         {run && (
           <div>
@@ -123,28 +200,19 @@ function App() {
               <div className="metric"><b>{pct(run.metrics.faithfulness)}</b><span>{adversarial ? "resisted" : "accuracy"}</span></div>
               <div className="metric"><b>{run.metrics.flagged_cases}</b><span>failures</span></div>
             </div>
-
             {run.per_kind && (
-              <table>
-                <thead><tr><th>Attack kind</th><th>Resisted</th></tr></thead>
+              <table><thead><tr><th>Attack kind</th><th>Resisted</th></tr></thead>
                 <tbody>{Object.entries(run.per_kind).map(([k, v]) =>
                   <tr key={k}><td>{k}</td><td style={{color: v < 1 ? "var(--fail)" : "var(--pass)"}}>{pct(v)}</td></tr>)}
-                </tbody>
-              </table>
-            )}
-
+                </tbody></table>)}
             {fails.length > 0 && <div style={{marginTop:14}}>
               <label>Caught vulnerabilities</label>
-              {fails.map((c, i) => {
-                const sev = (c.severity || "med");
-                return (
-                  <div className={"card " + sev} key={i}>
-                    <div className="kind">{c.note.split(" · ")[0]} · <span className={"sev " + sev}>{sev}</span></div>
-                    <div className="prompt">{c.q.replace(/^\[[^\]]+\]\s*/, "")}</div>
-                    <div className="detail">{c.detail} · <b>{c.grader}</b></div>
-                  </div>
-                );
-              })}
+              {fails.map((c, i) => { const sev = c.severity || "med"; return (
+                <div className={"card " + sev} key={i}>
+                  <div className="kind">{c.note.split(" · ")[0]} · <span className={"sev " + sev}>{sev}</span></div>
+                  <div className="prompt">{c.q.replace(/^\[[^\]]+\]\s*/, "")}</div>
+                  <div className="detail">{c.detail} · <b>{c.grader}</b></div>
+                </div>); })}
             </div>}
           </div>
         )}
@@ -153,7 +221,7 @@ function App() {
       <div className="panel">
         <label>Leaderboard — most vulnerable first</label>
         <table>
-          <thead><tr><th>Model</th><th>Vulnerability</th><th>Accuracy</th><th>Battery</th></tr></thead>
+          <thead><tr><th>Model</th><th>Vulnerability</th><th>Accuracy</th><th>Source</th></tr></thead>
           <tbody>
             {board.length === 0 && <tr><td colSpan="4" className="q">No runs yet — run one above.</td></tr>}
             {board.map(r => (
@@ -162,15 +230,14 @@ function App() {
                 <td style={{color: r.vulnerability > 0 ? "var(--fail)" : "var(--muted)"}}>{r.vulnerability == null ? "—" : pct(r.vulnerability)}</td>
                 <td>{pct(r.accuracy)}</td>
                 <td className="q">{r.source}</td>
-              </tr>
-            ))}
+              </tr>))}
           </tbody>
         </table>
       </div>
 
-      <p className="foot">One engine, two lenses: this shares its deterministic grader core
-        (<b>gradecore</b>) with <b>model-drift</b>, the longitudinal board. Crash-test runs are tagged
-        <b> crash_test</b> and kept off model-drift's pristine data.</p>
+      <p className="foot">One engine, two lenses: shares its deterministic grader core (<b>gradecore</b>)
+        with <b>model-drift</b>, the longitudinal board. Real-model runs never send your key here —
+        the browser calls the provider and posts only the answers to grade.</p>
     </div>
   );
 }
