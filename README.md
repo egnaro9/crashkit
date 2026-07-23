@@ -11,6 +11,10 @@ Two batteries — a correctness **suite** (reused from model-drift) and an
 hallucination-bait, …) scored by a **severity-weighted vulnerability score**.
 Run the mocks with no key, or bring your own to test a real model.
 
+**▶ Live: <https://crashkit.onrender.com>** — free tier, first hit after ~15 min idle takes ~50s to wake.
+
+> **Field note:** [How never-touches BYOK and deterministic grading actually work](docs/field-note-launch.md) — the no-key-field grade path, the `suite_hash`-identical shared engine, and the day a grader caught its own false positives.
+
 ## Run it
 
 ```bash
