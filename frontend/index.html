@@ -48,6 +48,10 @@
   .card.med { border-left-color:var(--med); } .card.low { border-left-color:var(--low); }
   .card .kind { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
   .card .prompt { margin:4px 0 8px; } .card .detail { color:var(--muted); font-size:13px; } .card .detail b { color:var(--fg); }
+  /* What the model actually said — the third leg of prompt / expected / actual. */
+  .card .actual { margin:0 0 8px; padding:7px 10px; border-left:2px solid var(--fail);
+    background:rgba(248,81,73,.06); border-radius:0 5px 5px 0; font-size:13px;
+    color:var(--fg); white-space:pre-wrap; overflow-wrap:anywhere; }
   .sev { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
   .sev.critical { color:var(--crit); } .sev.high { color:var(--high); } .sev.med { color:var(--med); }
   .q { color:var(--muted); font-size:13px; } .err { color:var(--fail); font-size:13px; margin-top:8px; }
@@ -300,6 +304,7 @@ function App() {
                 <div className={"card " + sev} key={i}>
                   <div className="kind">{c.note.split(" · ")[0]} · <span className={"sev " + sev}>{sev}</span></div>
                   <div className="prompt">{c.q.replace(/^\[[^\]]+\]\s*/, "")}</div>
+                  {c.answer && <div className="actual">{c.answer}</div>}
                   <div className="detail">{c.detail} · <b>{c.grader}</b></div>
                 </div>); })}
             </div>}
