@@ -10,16 +10,35 @@ from .adversarial import (
     BATTERY as ADVERSARIAL_BATTERY,
     CRASHTEST_VERSION,
     AdversarialTask,
+    flaky_transport,
     mock_transport,
+)
+from .agentic import (
+    AGENTIC_VERSION,
+    BATTERY as AGENTIC_BATTERY,
+    AgenticTask,
+    agentic_transport,
 )
 from .battery import BatteryTask, battery_hash, modeldrift_battery
 from .runner import SEVERITY_WEIGHT, Run, TaskResult, grade_answers, run
-from .serialize import to_eval_run
+from .serialize import to_eval_run, to_variance_report
+from .variance import (
+    MultiRun,
+    TaskVariance,
+    aggregate_runs,
+    grade_answer_sets,
+    run_n,
+)
 
-__version__ = "0.3.0"
+__version__ = "0.5.0"
 
 __all__ = [
     "BatteryTask", "modeldrift_battery", "battery_hash",
-    "AdversarialTask", "ADVERSARIAL_BATTERY", "CRASHTEST_VERSION", "mock_transport",
-    "Run", "TaskResult", "run", "grade_answers", "SEVERITY_WEIGHT", "to_eval_run",
+    "AdversarialTask", "ADVERSARIAL_BATTERY", "CRASHTEST_VERSION",
+    "mock_transport", "flaky_transport",
+    "AgenticTask", "AGENTIC_BATTERY", "AGENTIC_VERSION", "agentic_transport",
+    "Run", "TaskResult", "run", "grade_answers", "SEVERITY_WEIGHT",
+    "to_eval_run", "to_variance_report",
+    # run-N-times variance
+    "MultiRun", "TaskVariance", "aggregate_runs", "run_n", "grade_answer_sets",
 ]

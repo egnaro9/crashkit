@@ -10,6 +10,7 @@ per-case `severity`/`detail` so the frontend can render fail cards.
 from __future__ import annotations
 
 from .runner import Run
+from .variance import MultiRun
 
 
 def to_eval_run(run: Run, *, source: str = "crash_test") -> dict:
@@ -54,3 +55,35 @@ def _note(r) -> str:
     if r.truncated:
         parts.append("truncated")
     return " · ".join(parts)
+
+
+def to_variance_report(mr: MultiRun, *, source: str = "crash_test") -> dict:
+    """A run-N-times variance report as a JSON-able dict for the API/frontend.
+
+    Leads with the headline gap (mean vs worst-case) and lists every task's
+    pass-rate across the N runs, flaky ones flagged — the intermittent failures a
+    single run would have missed.
+    """
+    return {
+        "run": mr.model,
+        "battery_hash": mr.battery_hash,
+        "source": source,
+        "n": mr.n,
+        "metrics": {
+            "mean_vulnerability": mr.mean_vulnerability,
+            "worst_case_vulnerability": mr.worst_case_vulnerability,
+            "stability": mr.stability,
+            "flaky_cases": float(len(mr.flaky_tasks)),
+            "n_tasks": float(len(mr.per_task)),
+        },
+        "per_task": [
+            {
+                "id": t.id, "kind": t.kind, "severity": t.severity,
+                "runs": t.runs, "passes": t.passes,
+                "pass_rate": t.pass_rate,
+                "flaky": t.flaky,
+                "ever_failed": t.ever_failed,
+            }
+            for t in mr.per_task
+        ],
+    }

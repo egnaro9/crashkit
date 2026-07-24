@@ -122,6 +122,8 @@ function App() {
   const [board, setBoard] = useState([]);
   const [status, setStatus] = useState(""); const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const [lastPayload, setLastPayload] = useState(null);
+  const [n, setN] = useState(1);
+  const [variance, setVariance] = useState(null);
 
   const current = batteries.find(b => b.id === battery);
   const isByok = model === "__byok__";
@@ -165,13 +167,42 @@ function App() {
     setRun(await r.json());
   };
 
+  const runMockMulti = async () => {
+    const r = await fetch("/api/run-multi", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model, battery, n }) });
+    setVariance(await r.json());
+  };
+
+  const runByokMulti = async () => {
+    const bat = await fetch("/api/battery/" + battery).then(r => r.json());
+    const cfg = { shape: prov.shape, base: effBase, model: effModel, key: byok.key.trim() };
+    const sets = [];
+    for (let run = 0; run < n; run++) {
+      const answers = {};
+      for (let i = 0; i < bat.tasks.length; i++) {
+        setStatus(`Run ${run + 1}/${n} · asking… ${i + 1}/${bat.tasks.length}`);
+        answers[bat.tasks[i].id] = await callProvider(cfg, bat.tasks[i].prompt);
+      }
+      sets.push(answers);
+    }
+    setStatus("Grading…");
+    const payload = { battery, model: byok.provider + ":" + effModel, answer_sets: sets };  // <- no key
+    setLastPayload({ ...payload, answer_sets: `[…${sets.length} runs…]` });
+    const r = await fetch("/api/grade-multi", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload) });
+    setVariance(await r.json());
+  };
+
   const doRun = async () => {
-    setBusy(true); setErr(""); setRun(null);
-    try { isByok ? await runByok() : await runMock(); await loadBoard(); }
+    setBusy(true); setErr(""); setRun(null); setVariance(null);
+    try {
+      if (n > 1) { isByok ? await runByokMulti() : await runMockMulti(); }
+      else { isByok ? await runByok() : await runMock(); await loadBoard(); }
+    }
     catch (e) { setErr(String(e.message || e)); } finally { setBusy(false); setStatus(""); }
   };
 
-  const adversarial = battery === "adversarial";
+  const crashTest = battery === "adversarial" || battery === "agentic";
   const fails = run ? run.cases.filter(c => c.flagged) : [];
 
   return (
@@ -190,11 +221,21 @@ function App() {
           <div><label>Crash-test dummy</label>
             <select value={model} onChange={e => { setModel(e.target.value); setErr(""); }}>
               {(current?.models || []).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              <option value="__byok__">Bring your own key (real model)…</option>
+              {battery !== "agentic" && <option value="__byok__">Bring your own key (real model)…</option>}
             </select></div>
+          <div style={{maxWidth:78}}><label title="Run the battery N times and report the variance">Runs</label>
+            <input type="number" min="1" max="50" value={n}
+              onChange={e => setN(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))} /></div>
           <button onClick={doRun} disabled={busy || (isByok && (!byok.key || !effModel))}>
-            {busy ? (status || "Running…") : "Run the battery"}</button>
+            {busy ? (status || "Running…") : (n > 1 ? `Run ×${n}` : "Run the battery")}</button>
         </div>
+
+        {battery === "agentic" && (
+          <p className="note">🧭 The agentic battery scores an agent's <b>tool-call trajectory</b> against
+            an expected plan (deterministic ordered-overlap, partial credit). It's <b>mock-only here</b> —
+            grading a real model needs a tool-calling agent loop to record the trajectory, which this
+            in-browser playground doesn't run.</p>
+        )}
 
         {isByok && (
           <div className="byok">
@@ -244,8 +285,8 @@ function App() {
         {run && (
           <div>
             <div className="headline">
-              {adversarial && <div className="metric vuln"><b>{pct(run.metrics.vulnerability_score || 0)}</b><span>vulnerability</span></div>}
-              <div className="metric"><b>{pct(run.metrics.faithfulness)}</b><span>{adversarial ? "resisted" : "accuracy"}</span></div>
+              {crashTest && <div className="metric vuln"><b>{pct(run.metrics.vulnerability_score || 0)}</b><span>vulnerability</span></div>}
+              <div className="metric"><b>{pct(run.metrics.faithfulness)}</b><span>{crashTest ? "resisted" : "accuracy"}</span></div>
               <div className="metric"><b>{run.metrics.flagged_cases}</b><span>failures</span></div>
             </div>
             {run.per_kind && (
@@ -262,6 +303,30 @@ function App() {
                   <div className="detail">{c.detail} · <b>{c.grader}</b></div>
                 </div>); })}
             </div>}
+          </div>
+        )}
+
+        {variance && (
+          <div>
+            <div className="headline">
+              <div className="metric vuln"><b>{pct(variance.metrics.worst_case_vulnerability)}</b><span>worst-case</span></div>
+              <div className="metric"><b>{pct(variance.metrics.mean_vulnerability)}</b><span>mean / run</span></div>
+              <div className="metric"><b>{pct(variance.metrics.stability)}</b><span>stability</span></div>
+              <div className="metric"><b>{variance.metrics.flaky_cases}</b><span>flaky</span></div>
+            </div>
+            <p className="q">Over <b>{variance.n}</b> runs. <b>Worst-case</b> counts a task as failed if it
+              failed in <b>any</b> run — the posture an attacker actually faces; <b>mean</b> is what a
+              single run expects. The gap is the intermittent risk a one-shot test misses.</p>
+            <table><thead><tr><th>Task</th><th>Kind</th><th>Pass rate</th><th></th></tr></thead>
+              <tbody>{variance.per_task.map(t => (
+                <tr key={t.id}>
+                  <td>{t.id}</td><td>{t.kind}</td>
+                  <td style={{color: t.pass_rate < 1 ? "var(--fail)" : "var(--pass)"}}>
+                    {pct(t.pass_rate)} <span className="q">({t.passes}/{t.runs})</span></td>
+                  <td>{t.flaky ? <span className="sev high">flaky</span>
+                    : t.ever_failed ? <span className="sev critical">always fails</span> : ""}</td>
+                </tr>))}
+              </tbody></table>
           </div>
         )}
       </div>

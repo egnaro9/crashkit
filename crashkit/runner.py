@@ -13,10 +13,11 @@ far more than a formatting slip. Truncation rides on reliability, off both lines
 """
 from __future__ import annotations
 
+import inspect
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from gradecore import GradeInput, Verdict
 from modeldrift.providers import Model, ProviderError, call_meta, is_truncation
@@ -26,7 +27,27 @@ from .battery import BatteryTask, battery_hash, modeldrift_battery
 # How much a failed task at each severity weighs in the vulnerability score.
 SEVERITY_WEIGHT: Dict[str, int] = {"none": 0, "low": 1, "med": 2, "high": 4, "critical": 8}
 
-Transport = Callable[[Model, str, str], Tuple[str, Optional[str]]]
+# A transport returns (answer, finish_reason) or, for an agentic task, also a
+# tool-call trajectory: (answer, finish_reason, tool_calls). `_unpack` accepts
+# either, so text transports (call_meta, the adversarial mock) stay unchanged.
+Transport = Callable[..., Tuple]
+
+
+def _unpack(ret: Tuple) -> Tuple[str, Optional[str], Sequence[dict]]:
+    if len(ret) == 3:
+        answer, finish, tool_calls = ret
+        return answer, finish, tuple(tool_calls or ())
+    answer, finish = ret
+    return answer, finish, ()
+
+
+def _accepts_run(transport: Transport) -> bool:
+    """Does this transport take a `run` index? Only a variance-aware simulated
+    target does; real/mock text transports don't, and never see the index."""
+    try:
+        return "run" in inspect.signature(transport).parameters
+    except (ValueError, TypeError):
+        return False
 
 
 @dataclass(frozen=True)
@@ -90,17 +111,20 @@ class Run:
 
 
 def run(model: Model, tasks: Optional[List[BatteryTask]] = None, *,
-        transport: Transport = call_meta) -> Run:
+        transport: Transport = call_meta, run_index: Optional[int] = None) -> Run:
     tasks = tasks if tasks is not None else modeldrift_battery()
+    pass_run = run_index is not None and _accepts_run(transport)
     results: List[TaskResult] = []
     for t in tasks:
         severity = getattr(t, "severity", "med")
         try:
             t0 = time.perf_counter()
-            answer, finish = transport(model, t.prompt, task_id=t.id)
+            extra = {"run": run_index} if pass_run else {}
+            answer, finish, tool_calls = _unpack(
+                transport(model, t.prompt, task_id=t.id, **extra))
             latency = (time.perf_counter() - t0) * 1000.0
             truncated = is_truncation(finish)
-            verdict = t.grader(GradeInput(text=answer, prompt=t.prompt))
+            verdict = t.grader(GradeInput(text=answer, prompt=t.prompt, tool_calls=tool_calls))
         except ProviderError as e:
             answer, latency, truncated = "", 0.0, False
             verdict = Verdict(passed=False, score=0.0, severity="high",
@@ -113,13 +137,17 @@ def run(model: Model, tasks: Optional[List[BatteryTask]] = None, *,
 
 
 def grade_answers(model_label: str, tasks: List[BatteryTask],
-                  answers: Dict[str, str]) -> Run:
+                  answers: Dict[str, object]) -> Run:
     """Grade already-fetched answers — no model call, no transport, no key.
 
     This is the never-touches path: the browser calls the provider directly with
     the user's key and posts only {task_id: answer}. The server grades those and
     never sees the key. A task with no answer scores as an error (it pulls
     reliability, like a provider failure) rather than a silent pass/fail.
+
+    An answer is a string (final text) or, for an agentic task, a mapping
+    ``{"text": ..., "tool_calls": [...]}`` carrying the observed trajectory —
+    still just data the browser already has, so the key stays untouched.
     """
     results: List[TaskResult] = []
     for t in tasks:
@@ -130,8 +158,12 @@ def grade_answers(model_label: str, tasks: List[BatteryTask],
             verdict = Verdict(passed=False, score=0.0, severity="high",
                               detail="no answer provided", grader_id="error")
         else:
-            answer = str(raw)
-            verdict = t.grader(GradeInput(text=answer, prompt=t.prompt))
+            if isinstance(raw, dict):
+                answer = str(raw.get("text", ""))
+                tool_calls = tuple(raw.get("tool_calls") or ())
+            else:
+                answer, tool_calls = str(raw), ()
+            verdict = t.grader(GradeInput(text=answer, prompt=t.prompt, tool_calls=tool_calls))
         results.append(TaskResult(
             id=t.id, prompt=t.prompt, kind=t.kind, answer=answer, verdict=verdict,
             truncated=False, latency_ms=0.0, severity=severity,

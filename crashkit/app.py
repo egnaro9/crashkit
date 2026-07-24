@@ -7,15 +7,16 @@
     GET  /api/runs/{id}          -> one run with its per-task verdicts
     GET  /                       -> the static playground
 
-Two batteries: the model-drift correctness **suite**, and the **adversarial**
-crash-test. Still mock-only — no keys, no live inference. BYOK real providers
+Three batteries: the model-drift correctness **suite**, the **adversarial**
+crash-test, and the **agentic** crash-test (scoring an agent's tool-call
+trajectory). Still mock-only — no keys, no live inference. BYOK real providers
 are the next step.
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -27,9 +28,13 @@ from . import grade_answers
 from . import run as run_battery
 from . import to_eval_run
 from .adversarial import BATTERY as ADVERSARIAL_BATTERY
-from .adversarial import mock_transport
+from .adversarial import flaky_transport, mock_transport
+from .agentic import BATTERY as AGENTIC_BATTERY
+from .agentic import agentic_transport
 from .battery import modeldrift_battery
+from .serialize import to_variance_report
 from .store import RunStore
+from .variance import grade_answer_sets, run_n
 
 
 def _mock(mid: str, label: str, profile: str) -> Model:
@@ -54,6 +59,17 @@ _BATTERIES = {
         "models": {
             "mock:safe": _mock("mock:safe", "Mock (safe)", "safe"),
             "mock:vulnerable": _mock("mock:vulnerable", "Mock (vulnerable)", "vulnerable"),
+            # a simulated stochastic target — only visible under run-N-times.
+            "mock:flaky": _mock("mock:flaky", "Mock (flaky — run ×N)", "flaky"),
+        },
+    },
+    "agentic": {
+        "label": "Agentic crash-test (tool-call trajectory)",
+        "tasks": lambda: AGENTIC_BATTERY,
+        "transport": agentic_transport,
+        "models": {
+            "mock:safe": _mock("mock:safe", "Mock agent (safe)", "safe"),
+            "mock:vulnerable": _mock("mock:vulnerable", "Mock agent (reckless)", "vulnerable"),
         },
     },
 }
@@ -61,9 +77,37 @@ _BATTERIES = {
 _FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 
 
+def _transport_for(battery: dict, model: Model):
+    """The transport a given model runs on. The simulated 'flaky' target runs the
+    variance-aware transport (it slips on a subset of runs); everyone else uses
+    the battery's default transport."""
+    if model.model == "flaky":
+        return flaky_transport
+    return battery["transport"]
+
+
 class RunRequest(BaseModel):
     model: str = Field(description="a model id from GET /api/batteries")
     battery: str = Field(default="suite", description="'suite' or 'adversarial'")
+
+
+class RunMultiRequest(BaseModel):
+    """Run a battery N times against one (mock) target and report the variance —
+    which failures are intermittent, and how mean vulnerability differs from the
+    worst case an attacker actually faces."""
+    model: str = Field(description="a model id from GET /api/batteries")
+    battery: str = Field(default="adversarial")
+    n: int = Field(default=5, ge=1, le=50, description="number of runs")
+
+
+class GradeMultiRequest(BaseModel):
+    """The never-touches N-runs path: the browser sampled the real model N times
+    (temperature > 0) and posts N answer-sets. No key field — the key never
+    reaches this server."""
+    battery: str = Field(default="adversarial")
+    model: str = Field(description="a display label for the run")
+    answer_sets: list[dict[str, Any]] = Field(
+        description="N × {task_id: answer|{text,tool_calls}}, each a client-side run")
 
 
 class GradeRequest(BaseModel):
@@ -72,7 +116,10 @@ class GradeRequest(BaseModel):
     provider key never reaches this server."""
     battery: str = Field(default="adversarial")
     model: str = Field(description="a display label for the run, e.g. 'openai:gpt-4o'")
-    answers: dict[str, str] = Field(description="{task_id: answer text}, fetched client-side")
+    # {task_id: answer}, fetched client-side. An answer is the text, or for an
+    # agentic task a {"text", "tool_calls"} object carrying the observed
+    # trajectory — still just data the browser has, so the key stays untouched.
+    answers: dict[str, Any] = Field(description="{task_id: answer|{text,tool_calls}}, client-side")
 
 
 def create_app(store: Optional[RunStore] = None) -> FastAPI:
@@ -103,9 +150,25 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
             raise HTTPException(status_code=404,
                                 detail=f"model {body.model!r} not in battery {body.battery!r}")
         eval_run = to_eval_run(
-            run_battery(model, battery["tasks"](), transport=battery["transport"]))
+            run_battery(model, battery["tasks"](), transport=_transport_for(battery, model)))
         run_id = app.state.store.add(eval_run)
         return {"id": run_id, **eval_run}
+
+    @app.post("/api/run-multi")
+    def do_run_multi(body: RunMultiRequest) -> dict:
+        """Run a battery N times against a mock target and return the variance
+        report (mean vs worst-case, flaky tasks). Not stored on the leaderboard —
+        the board tracks single-run vulnerability; this is a stability probe."""
+        battery = _BATTERIES.get(body.battery)
+        if battery is None:
+            raise HTTPException(status_code=404, detail=f"unknown battery {body.battery!r}")
+        model = battery["models"].get(body.model)
+        if model is None:
+            raise HTTPException(status_code=404,
+                                detail=f"model {body.model!r} not in battery {body.battery!r}")
+        mr = run_n(model, battery["tasks"](), body.n,
+                   transport=_transport_for(battery, model))
+        return to_variance_report(mr)
 
     @app.get("/api/battery/{battery_id}")
     def battery_prompts(battery_id: str) -> dict:
@@ -126,6 +189,18 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
         eval_run = to_eval_run(grade_answers(body.model, b["tasks"](), body.answers))
         run_id = app.state.store.add(eval_run)
         return {"id": run_id, **eval_run}
+
+    @app.post("/api/grade-multi")
+    def grade_multi(body: GradeMultiRequest) -> dict:
+        """Grade N client-side answer-sets and report the variance — the
+        never-touches path for run-N-times. Still no key here."""
+        b = _BATTERIES.get(body.battery)
+        if b is None:
+            raise HTTPException(status_code=404, detail=f"unknown battery {body.battery!r}")
+        if not body.answer_sets:
+            raise HTTPException(status_code=400, detail="answer_sets must be non-empty")
+        mr = grade_answer_sets(body.model, b["tasks"](), body.answer_sets)
+        return to_variance_report(mr)
 
     @app.get("/api/runs")
     def leaderboard() -> list[dict]:

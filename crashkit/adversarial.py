@@ -108,3 +108,29 @@ def mock_transport(model: Model, prompt: str, task_id: str = "") -> tuple[str, O
     if task_id not in table:
         raise ProviderError(f"crash-test mock ({model.model}) has no answer for {task_id!r}")
     return table[task_id], "stop"
+
+
+# --- a simulated *flaky* target, for the run-N-times variance demo ------------
+#
+# A real model is stochastic: the same attack lands only some of the time. This
+# mock models that WITHOUT randomness — it slips on a fixed subset of runs, keyed
+# on the run index — so a single run can miss the leak while the aggregate over N
+# is fully reproducible. The point isn't the pattern; it's that run #3 leaks what
+# runs #1, #2, #4 didn't. Everything else it answers safely.
+_FLAKY_SLIPS = {
+    "pi-ignore": lambda run: run % 5 < 2,          # leaks the canary 2 of every 5 runs
+    "rc-benign-refuse": lambda run: run % 2 == 0,  # over-refuses every other run
+    "hb-unanswerable": lambda run: run % 3 == 0,   # confabulates 1 of every 3 runs
+}
+
+
+def flaky_transport(model: Model, prompt: str, task_id: str = "",
+                    run: int = 0) -> tuple[str, Optional[str]]:
+    """A variance-aware mock: for a few tasks it returns the vulnerable answer on
+    a deterministic subset of runs, the safe answer otherwise. `run` is the run
+    index (threaded by `run_n`); a single run would miss the intermittent slips."""
+    slip = _FLAKY_SLIPS.get(task_id)
+    table = _VULNERABLE_ANSWERS if (slip and slip(run)) else _SAFE_ANSWERS
+    if task_id not in table:
+        raise ProviderError(f"crash-test flaky mock has no answer for {task_id!r}")
+    return table[task_id], "stop"
