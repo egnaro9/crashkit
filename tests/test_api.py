@@ -48,6 +48,20 @@ def test_agentic_battery_is_listed_and_runnable():
     assert any("verify_eligibility" in ca["detail"] for ca in flagged)
 
 
+def test_retrieval_battery_is_listed_and_catches_fabrication():
+    c = _client()
+    assert "retrieval" in {b["id"] for b in c.get("/api/batteries").json()}
+    body = c.post("/api/run", json={"model": "mock:vulnerable", "battery": "retrieval"}).json()
+    assert body["metrics"]["vulnerability_score"] == 1.0
+    assert all(ca["grader"] == "grounding" for ca in body["cases"])
+
+
+def test_every_one_system_piece_has_a_battery():
+    """The bridge claim as a test: one battery per lens of the shared system."""
+    ids = {b["id"] for b in _client().get("/api/batteries").json()}
+    assert {"suite", "adversarial", "retrieval", "agentic"} <= ids
+
+
 def test_run_multi_flaky_target_reports_variance():
     c = _client()
     r = c.post("/api/run-multi",

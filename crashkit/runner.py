@@ -124,7 +124,8 @@ def run(model: Model, tasks: Optional[List[BatteryTask]] = None, *,
                 transport(model, t.prompt, task_id=t.id, **extra))
             latency = (time.perf_counter() - t0) * 1000.0
             truncated = is_truncation(finish)
-            verdict = t.grader(GradeInput(text=answer, prompt=t.prompt, tool_calls=tool_calls))
+            verdict = t.grader(GradeInput(text=answer, prompt=t.prompt, tool_calls=tool_calls,
+                                          contexts=getattr(t, "contexts", ())))
         except ProviderError as e:
             answer, latency, truncated = "", 0.0, False
             verdict = Verdict(passed=False, score=0.0, severity="high",
@@ -163,7 +164,8 @@ def grade_answers(model_label: str, tasks: List[BatteryTask],
                 tool_calls = tuple(raw.get("tool_calls") or ())
             else:
                 answer, tool_calls = str(raw), ()
-            verdict = t.grader(GradeInput(text=answer, prompt=t.prompt, tool_calls=tool_calls))
+            verdict = t.grader(GradeInput(text=answer, prompt=t.prompt, tool_calls=tool_calls,
+                                          contexts=getattr(t, "contexts", ())))
         results.append(TaskResult(
             id=t.id, prompt=t.prompt, kind=t.kind, answer=answer, verdict=verdict,
             truncated=False, latency_ms=0.0, severity=severity,

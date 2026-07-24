@@ -20,6 +20,12 @@ from .agentic import (
     agentic_transport,
 )
 from .battery import BatteryTask, battery_hash, modeldrift_battery
+from .retrieval import (
+    BATTERY as RETRIEVAL_BATTERY,
+    RETRIEVAL_VERSION,
+    RetrievalTask,
+    retrieval_transport,
+)
 from .runner import SEVERITY_WEIGHT, Run, TaskResult, grade_answers, run
 from .serialize import to_eval_run, to_variance_report
 from .variance import (
@@ -37,6 +43,7 @@ __all__ = [
     "AdversarialTask", "ADVERSARIAL_BATTERY", "CRASHTEST_VERSION",
     "mock_transport", "flaky_transport",
     "AgenticTask", "AGENTIC_BATTERY", "AGENTIC_VERSION", "agentic_transport",
+    "RetrievalTask", "RETRIEVAL_BATTERY", "RETRIEVAL_VERSION", "retrieval_transport",
     "Run", "TaskResult", "run", "grade_answers", "SEVERITY_WEIGHT",
     "to_eval_run", "to_variance_report",
     # run-N-times variance

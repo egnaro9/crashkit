@@ -202,7 +202,7 @@ function App() {
     catch (e) { setErr(String(e.message || e)); } finally { setBusy(false); setStatus(""); }
   };
 
-  const crashTest = battery === "adversarial" || battery === "agentic";
+  const crashTest = battery !== "suite";
   const fails = run ? run.cases.filter(c => c.flagged) : [];
 
   return (
@@ -345,8 +345,13 @@ function App() {
         </table>
       </div>
 
-      <p className="foot"><b>One engine, two lenses</b>: shares its <b>deterministic grader core</b>
-        (<b>gradecore</b>) with <b>model-drift</b>, the longitudinal board. Real-model runs
+      <p className="foot"><b>One engine, four lenses</b> — every battery above is a grader from the
+        same shared system, not a reimplementation: <b>correctness</b> is <b>model-drift's</b> own
+        frozen suite (identical <code>suite_hash</code>), <b>adversarial</b> and <b>agentic</b> are{" "}
+        <b>gradecore</b> graders, and <b>retrieval grounding</b> is the identical function{" "}
+        <b>rag-eval-lab</b> catches hallucinations with. Runs serialize to the same{" "}
+        <code>eval_run.json</code> and post to <b>eval-history</b> tagged <code>source=crash_test</code>,
+        so this can never scribble on the drift board. Real-model runs
         <b> never send your key here</b> — the browser calls the provider and posts
         <b> only the answers</b> to grade.</p>
     </div>

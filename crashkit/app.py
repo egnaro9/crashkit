@@ -7,10 +7,11 @@
     GET  /api/runs/{id}          -> one run with its per-task verdicts
     GET  /                       -> the static playground
 
-Three batteries: the model-drift correctness **suite**, the **adversarial**
-crash-test, and the **agentic** crash-test (scoring an agent's tool-call
-trajectory). Still mock-only — no keys, no live inference. BYOK real providers
-are the next step.
+Four batteries — one per piece of the shared eval system: the model-drift
+correctness **suite**, the **adversarial** crash-test, **retrieval** grounding
+(the same gradecore metric rag-eval-lab reports), and the **agentic** crash-test
+(an agent's tool-call trajectory). Every battery is graded by gradecore and
+serializes to eval-history's wire shape.
 """
 from __future__ import annotations
 
@@ -32,6 +33,8 @@ from .adversarial import flaky_transport, mock_transport
 from .agentic import BATTERY as AGENTIC_BATTERY
 from .agentic import agentic_transport
 from .battery import modeldrift_battery
+from .retrieval import BATTERY as RETRIEVAL_BATTERY
+from .retrieval import retrieval_transport
 from .serialize import to_variance_report
 from .store import RunStore
 from .variance import grade_answer_sets, run_n
@@ -61,6 +64,15 @@ _BATTERIES = {
             "mock:vulnerable": _mock("mock:vulnerable", "Mock (vulnerable)", "vulnerable"),
             # a simulated stochastic target — only visible under run-N-times.
             "mock:flaky": _mock("mock:flaky", "Mock (flaky — run ×N)", "flaky"),
+        },
+    },
+    "retrieval": {
+        "label": "Retrieval grounding (RAG hallucination)",
+        "tasks": lambda: RETRIEVAL_BATTERY,
+        "transport": retrieval_transport,
+        "models": {
+            "mock:safe": _mock("mock:safe", "Mock (extractive)", "safe"),
+            "mock:vulnerable": _mock("mock:vulnerable", "Mock (fabricating)", "vulnerable"),
         },
     },
     "agentic": {
