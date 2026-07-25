@@ -235,6 +235,15 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
         def home() -> FileResponse:
             return FileResponse(index)
 
+    # The social preview card. Named explicitly rather than mounting the whole
+    # frontend directory as static — this app serves one page, and an open
+    # directory mount is a wider surface than the one file needs.
+    og = _FRONTEND / "og-cover.png"
+    if og.exists():
+        @app.get("/og-cover.png")
+        def og_cover() -> FileResponse:
+            return FileResponse(og, media_type="image/png")
+
     return app
 
 
