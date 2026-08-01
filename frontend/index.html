@@ -26,6 +26,14 @@
   h1 { font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
   .sub { color:var(--muted); margin:0 0 24px; } .sub code { color:var(--accent); }
   .sub b { color:var(--fg); font-weight:600; }
+  .demo { margin:22px 0 0; border:1px solid var(--line); border-left:3px solid var(--amber);
+          border-radius:10px; overflow:hidden; background:var(--panel); }
+  .demo img { display:block; width:100%; height:auto; }
+  .demo figcaption { padding:12px 16px 14px; border-top:1px solid var(--line);
+          font-size:12.5px; line-height:1.5; color:var(--muted); }
+  .demo figcaption a { color:var(--amber); }
+  .colophon { margin:22px 0 44px; font-size:13px; color:var(--muted); text-align:center; }
+  .colophon a { color:var(--accent); }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:20px; }
   label { color:var(--muted); font-size:13px; display:block; margin-bottom:6px; }
   select, button, input { font:inherit; border-radius:7px; border:1px solid var(--line); }
@@ -224,7 +232,7 @@ function App() {
     <div className="wrap">
       <h1>AI Crash Test</h1>
       <p className="sub">Point it at a model, run a battery, read the <b>deterministic grades</b>.
-        <b>No LLM judge</b> — every verdict is a <b>predicate you can rerun</b>.{" "}
+{" "}<b>No LLM judge</b> — every verdict is a <b>predicate you can rerun</b>.{" "}
         <code>no signup · your key stays in your browser</code></p>
 
       <div className="panel">
@@ -352,7 +360,10 @@ function App() {
         <table>
           <thead><tr><th>Model</th><th>Vulnerability</th><th>Accuracy</th><th>Source</th></tr></thead>
           <tbody>
-            {board.length === 0 && <tr><td colSpan="4" className="q">No runs yet — run one above.</td></tr>}
+            {board.length === 0 && <tr><td colSpan="4" className="q">
+              Nothing has been run in this browser yet — the table fills in as runs complete.
+              Below is a recording of the adversarial battery against a deliberately-vulnerable
+              mock, so you can see the shape of a result without running one.</td></tr>}
             {board.map(r => (<tr key={r.id}>
               <td>{r.model}</td>
               <td style={{color: r.vulnerability > 0 ? "var(--fail)" : "var(--muted)"}}>{r.vulnerability == null ? "—" : pct(r.vulnerability)}</td>
@@ -370,6 +381,24 @@ function App() {
         so this can never scribble on the drift board. Real-model runs
         <b> never send your key here</b> — the browser calls the provider and posts
         <b> only the answers</b> to grade.</p>
+      <figure className="demo">
+        <img src="https://raw.githubusercontent.com/egnaro9/crashkit/main/docs/demo.gif"
+             alt="The adversarial battery run against a deliberately-vulnerable mock: vulnerability 1.00, with one fail card naming each broken guarantee" />
+        <figcaption>The same battery against a deliberately-vulnerable mock — no API key, no
+          network. The mock answers from a fixed profile, so every fail card reproduces
+          byte-for-byte. <a href="https://asciinema.org/a/1jMrzzjhacCRjt06" target="_blank"
+          rel="noopener">Play it as a terminal session →</a></figcaption>
+      </figure>
+
+      <p className="colophon">
+        Built by <a href="https://egnaro9.github.io" target="_blank" rel="noopener">Erik Hill</a>
+        {" · "}<a href="https://github.com/egnaro9/crashkit" target="_blank" rel="noopener">crashkit source</a>
+        {" · "}<a href="https://github.com/egnaro9/gradecore" target="_blank" rel="noopener">gradecore</a>
+        {" (the grading engine) · "}
+        <a href="https://egnaro9.github.io/model-drift/" target="_blank" rel="noopener">model-drift</a>
+        {" (the longitudinal board) · "}
+        <a href="https://egnaro9.github.io/rag-eval-lab/" target="_blank" rel="noopener">rag-eval-lab</a>
+      </p>
     </div>
   );
 }
