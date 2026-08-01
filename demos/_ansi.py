@@ -22,6 +22,7 @@ _THEMES = {
         RED="248;113;113",   # #f87171
         VIOLET="192;132;252",  # #c084fc
         BLUE="96;165;250",   # #60a5fa
+        YELLOW="245;208;122",  # #f5d07a
     ),
     "blue": dict(
         FG="192;201;229",    # #c0c9e5  cool blue-white body
@@ -30,8 +31,9 @@ _THEMES = {
         AMBER="249;115;22",  # #f97316  orange, used sparingly
         TEAL="122;253;225",  # #7afde1  aqua
         RED="252;100;77",    # #fc644d  coral
-        VIOLET="255;79;161",  # #ff4fa1
+        VIOLET="255;79;161",  # #ff4fa1  pink
         BLUE="108;155;245",  # #6c9bf5
+        YELLOW="255;240;155",  # #fff09b
     ),
 }
 
@@ -44,6 +46,7 @@ TEAL = _P["TEAL"]
 RED = _P["RED"]
 VIOLET = _P["VIOLET"]
 BLUE = _P["BLUE"]
+YELLOW = _P["YELLOW"]
 
 
 
@@ -88,7 +91,13 @@ def blue(s, **k):
     return _c(BLUE, s, **k)
 
 
-SEVERITY = {"critical": RED, "high": AMBER, "med": VIOLET, "low": DIM, "none": TEAL}
+def yellow(s, **k):
+    return _c(YELLOW, s, **k)
+
+
+# Orange is reserved as the one attention colour, so 'high' takes yellow rather
+# than competing with the accent rule and the status dot.
+SEVERITY = {"critical": RED, "high": YELLOW, "med": VIOLET, "low": DIM, "none": TEAL}
 
 
 def severity(name):
