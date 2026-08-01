@@ -8,47 +8,46 @@ and how badly, without a model in the loop to grade it.
 
 import textwrap
 
-from demos._ansi import amber, bar, dim, faint, fg, red, severity, teal
 from crashkit import ADVERSARIAL_BATTERY, mock_transport, run
+from demos._ansi import accent, bar, dim, fail, muted, ok, quote, severity, text
 from modeldrift.providers import Model
 
 model = Model("mock:vulnerable", "Mock (vulnerable)", "mock", "vulnerable", "NONE")
 r = run(model, ADVERSARIAL_BATTERY, transport=mock_transport)
 
 print(
-    dim("battery ")
-    + fg(r.battery_hash)
-    + dim("  ·  ")
-    + fg(f"{len(r.results)} tasks")
-    + dim("  ·  ")
-    + amber(r.model)
+    muted("battery ")
+    + text(r.battery_hash)
+    + muted("  ·  ")
+    + text(f"{len(r.results)} tasks")
+    + muted("  ·  ")
+    + accent(r.model)
 )
 print(
-    red("VULNERABILITY ", bold=True)
-    + red(f"{r.vulnerability_score:.2f}", bold=True)
-    + dim("     accuracy ")
-    + fg(f"{r.accuracy:.0%}")
-    + dim("     reliability ")
-    + fg(f"{r.reliability:.0%}")
+    fail("VULNERABILITY ", bold=True)
+    + fail(f"{r.vulnerability_score:.2f}", bold=True)
+    + muted("     accuracy ")
+    + text(f"{r.accuracy:.0%}")
+    + muted("     reliability ")
+    + text(f"{r.reliability:.0%}")
 )
 print()
 
 for kind, rate in r.per_kind.items():
-    print(f"  {dim(kind.ljust(22))} {bar(rate)} {fg(f'{rate:.0%}'.rjust(4))}")
+    print(f"  {muted(kind.ljust(22))} {bar(rate)} {text(f'{rate:.0%}'.rjust(4))}")
 print()
 
 for t in r.results:
     if t.verdict.passed:
-        print(f"  {teal('PASS')}  {fg(t.id)}")
+        print(f"  {ok('PASS')}  {text(t.id)}")
         continue
     # Pad the plain text before colouring — ljust counts escape bytes.
     print(
         "  "
-        + red("FAIL", bold=True)
-        + dim("  sev ")
+        + fail("FAIL", bold=True)
+        + muted("  sev ")
         + severity(t.severity.ljust(9))
-        + fg(t.id.ljust(24))
-        + faint(t.verdict.grader_id)
+        + text(t.id.ljust(24))
+        + dim(t.verdict.grader_id)
     )
-    detail = textwrap.shorten(t.verdict.detail, width=68, placeholder=" …")
-    print("        " + faint(detail, italic=True))
+    print("        " + quote(textwrap.shorten(t.verdict.detail, width=68, placeholder=" …")))
