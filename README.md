@@ -15,6 +15,10 @@ Run the mocks with no key, or bring your own to test a real model.
 
 > **Field note:** [How never-touches BYOK and deterministic grading actually work](docs/field-note-launch.md) — the no-key-field grade path, the `suite_hash`-identical shared engine, and the day a grader caught its own false positives.
 
+<img src="docs/demo.gif" alt="The adversarial battery run against a deliberately-vulnerable mock: vulnerability 1.00, and one fail card per broken guarantee" width="100%">
+
+*Eight adversarial tasks against a deliberately-vulnerable mock — no API key, no network. The mock answers from a fixed profile, so every fail card reproduces byte-for-byte: `PYTHONPATH=../model-drift python3 -m demos.fail_cards`. [Play it as a terminal session](https://asciinema.org/a/1jMrzzjhacCRjt06) — the text is selectable.*
+
 ## Run it
 
 ```bash
