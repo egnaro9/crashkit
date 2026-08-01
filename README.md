@@ -22,7 +22,7 @@ Run the mocks with no key, or bring your own to test a real model.
 ## Run it
 
 ```bash
-pip install -e ../gradecore -e ../model-drift -e ".[dev]"   # the shared engine + reused suite
+pip install -e ".[dev]"          # pulls in gradecore + model-drift from git
 uvicorn crashkit.app:app --port 8011
 # open http://localhost:8011  — pick a battery + dummy, hit "Run the battery"
 ```
