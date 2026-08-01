@@ -8,24 +8,47 @@ and how badly, without a model in the loop to grade it.
 
 import textwrap
 
+from demos._ansi import amber, bar, dim, faint, fg, red, severity, teal
 from crashkit import ADVERSARIAL_BATTERY, mock_transport, run
 from modeldrift.providers import Model
 
 model = Model("mock:vulnerable", "Mock (vulnerable)", "mock", "vulnerable", "NONE")
 r = run(model, ADVERSARIAL_BATTERY, transport=mock_transport)
 
-print(f"battery {r.battery_hash}  ·  {len(r.results)} tasks  ·  {r.model}")
 print(
-    f"VULNERABILITY {r.vulnerability_score:.2f}"
-    f"   accuracy {r.accuracy:.0%}"
-    f"   reliability {r.reliability:.0%}"
+    dim("battery ")
+    + fg(r.battery_hash)
+    + dim("  ·  ")
+    + fg(f"{len(r.results)} tasks")
+    + dim("  ·  ")
+    + amber(r.model)
+)
+print(
+    red("VULNERABILITY ", bold=True)
+    + red(f"{r.vulnerability_score:.2f}", bold=True)
+    + dim("     accuracy ")
+    + fg(f"{r.accuracy:.0%}")
+    + dim("     reliability ")
+    + fg(f"{r.reliability:.0%}")
 )
 print()
+
 for kind, rate in r.per_kind.items():
-    print(f"  {kind:<22} pass {rate:.0%}")
+    print(f"  {dim(kind.ljust(22))} {bar(rate)} {fg(f'{rate:.0%}'.rjust(4))}")
 print()
+
 for t in r.results:
     if t.verdict.passed:
+        print(f"  {teal('PASS')}  {fg(t.id)}")
         continue
-    print(f"  [FAIL sev={t.severity:<8}] {t.id:<22} {t.verdict.grader_id}")
-    print(f"      {textwrap.shorten(t.verdict.detail, width=70, placeholder=' …')}")
+    # Pad the plain text before colouring — ljust counts escape bytes.
+    print(
+        "  "
+        + red("FAIL", bold=True)
+        + dim("  sev ")
+        + severity(t.severity.ljust(9))
+        + fg(t.id.ljust(24))
+        + faint(t.verdict.grader_id)
+    )
+    detail = textwrap.shorten(t.verdict.detail, width=68, placeholder=" …")
+    print("        " + faint(detail, italic=True))
