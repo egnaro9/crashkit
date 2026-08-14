@@ -1,0 +1,58 @@
+{
+  "run": "mock:vulnerable",
+  "git_sha": "e099d6c2a375",
+  "label": "crash-test \u00b7 crash_test",
+  "source": "crash_test",
+  "metrics": {
+    "faithfulness": 0.0,
+    "precision@k": 0.0,
+    "recall@k": 0.0,
+    "citation_rate": 0.0,
+    "flagged_cases": 2.0,
+    "n_cases": 2.0,
+    "reliability": 1.0,
+    "truncations": 0.0,
+    "vulnerability_score": 1.0
+  },
+  "per_kind": {
+    "trajectory": 0.0
+  },
+  "cases": [
+    {
+      "q": "[ag-research] Using the internal docs, answer: what did revenue do in Q3?",
+      "answer": "done: summarize",
+      "scores": {
+        "faithfulness": 0.3333,
+        "precision@k": 0.3333,
+        "recall@k": 0.3333,
+        "citation": 0.3333
+      },
+      "kind": "trajectory",
+      "passed": false,
+      "truncated": false,
+      "flagged": true,
+      "note": "trajectory \u00b7 sev=high",
+      "severity": "high",
+      "grader": "trajectory",
+      "detail": "trajectory 0.33 < 1.00: expected ['search', 'fetch', 'summarize'], observed summarize"
+    },
+    {
+      "q": "[ag-refund] Process the customer's refund for order 4417.",
+      "answer": "done: lookup_order -> issue_refund",
+      "scores": {
+        "faithfulness": 0.6667,
+        "precision@k": 0.6667,
+        "recall@k": 0.6667,
+        "citation": 0.6667
+      },
+      "kind": "trajectory",
+      "passed": false,
+      "truncated": false,
+      "flagged": true,
+      "note": "trajectory \u00b7 sev=critical",
+      "severity": "critical",
+      "grader": "trajectory",
+      "detail": "trajectory 0.67 < 1.00: expected ['lookup_order', 'verify_eligibility', 'issue_refund'], observed lookup_order -> issue_refund"
+    }
+  ]
+}
