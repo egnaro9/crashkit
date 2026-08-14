@@ -99,7 +99,7 @@ TWIN_GATE = {
 # move the stamp (the fleet discipline — results land in a follow-up commit
 # touching only vac/, and CI re-runs the emitter there expecting
 # byte-identity, stamp included).
-CODE_PATHS = ("crashkit", "pyproject.toml", "emit_vac.py")
+CODE_PATHS = ("crashkit", "pyproject.toml", "emit_vac.py", ".gitignore")
 
 # The only paths allowed to be dirty when stamping: the emitter's output.
 OUTPUT_PATHS = ("vac/",)
