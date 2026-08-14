@@ -82,6 +82,20 @@ Crash-test runs are tagged `crash_test` and, from Phase 1, live in a **separate*
 database from model-drift's monitoring board — adversarial runs cross-reference
 the board read-only and never write to it. Phase 0 stores locally.
 
+## The claim, verifiable offline
+
+`vac/` is a closed [VAC](https://github.com/egnaro9/vac-protocol) evidence bundle
+(profile `crashkit-battery-v1`): the four CLI battery runs (adversarial/agentic ×
+safe/vulnerable twin controls, scoring exactly 0.0/1.0 vulnerability), the reused
+35-task model-drift suite run, both never-touches grading-replay runs, and a
+10-run flaky variance report — every artifact sha256-pinned, every declared
+number recomputable offline from the committed per-case rows, and the whole
+bundle regenerated **byte-identically** by `python emit_vac.py` (which refuses a
+dirty tree, a payload whose metrics disagree with its own rows, and any twin
+control off its exact score). Live BYOK runs and the hosted leaderboard are
+explicitly out of scope — the non-claims live in `claim.limitations` inside
+[`vac/vac.json`](vac/vac.json).
+
 ```bash
 pip install -e ".[dev]" && pytest -q      # incl. a determinism test — a serialized run is byte-stable
 ```

@@ -6,6 +6,13 @@ and Phase 1 can POST straight to a (separate) eval-history instance. Additions:
 `source` (the discriminator that keeps these runs off model-drift's pristine
 board), a **vulnerability_score** in metrics, a **per_kind** breakdown, and
 per-case `severity`/`detail` so the frontend can render fail cards.
+
+Every case also carries explicit `kind`/`passed`/`truncated` (not just the
+derived `flagged` and a free-text note), so every aggregate in `metrics` and
+`per_kind` is recomputable offline from the case rows alone — the contract
+vac-protocol's `crashkit-battery-v1` evidence profile verifies. A reader who
+must parse a note to re-earn a number has been handed a declaration, not
+evidence.
 """
 from __future__ import annotations
 
@@ -23,6 +30,9 @@ def to_eval_run(run: Run, *, source: str = "crash_test") -> dict:
                 "faithfulness": r.verdict.score, "precision@k": r.verdict.score,
                 "recall@k": r.verdict.score, "citation": r.verdict.score,
             },
+            "kind": r.kind,
+            "passed": bool(r.verdict.passed),
+            "truncated": bool(r.truncated),
             # a truncated call is not an accuracy failure (it's off the line)
             "flagged": (not r.verdict.passed) and (not r.truncated),
             "note": _note(r),
