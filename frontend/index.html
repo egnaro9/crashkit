@@ -271,7 +271,7 @@ function App() {
               <p>Your key is sent only to <b>{host}</b>. Below is the entire request our server receives —
                 <b> there is no key field in it</b>. <b>Don't trust this panel</b>: open the{" "}
                 <b>Network tab</b> (your browser's own record — <b>we can't fake it</b>), and read the{" "}
-                <a href={GRADE_SRC} target="_blank" rel="noopener">open-source grade endpoint</a>, which
+                <a href={GRADE_SRC} target="erikhill-out">open-source grade endpoint</a>, which
                 has <b>no key parameter</b>.</p>
               <pre>{lastPayload
                 ? "POST /api/grade\n" + JSON.stringify({ ...lastPayload, answers: "{…answers…}" }, null, 2)
@@ -388,19 +388,18 @@ function App() {
              alt="The adversarial battery run against a deliberately-vulnerable mock: vulnerability 1.00, with one fail card naming each broken guarantee" />
         <figcaption>The same battery against a deliberately-vulnerable mock — no API key, no
           network. The mock answers from a fixed profile, so every fail card reproduces
-          byte-for-byte. <a href="https://asciinema.org/a/1jMrzzjhacCRjt06" target="_blank"
-          rel="noopener">Play it as a terminal session →</a></figcaption>
+          byte-for-byte. <a href="https://asciinema.org/a/1jMrzzjhacCRjt06" target="erikhill-out">Play it as a terminal session →</a></figcaption>
       </figure>
 
       <p className="colophon">
-        Built by <a href="https://egnaro9.github.io" target="_blank" rel="noopener">Erik Hill</a>
-        {" · "}<a href="https://github.com/egnaro9/crashkit" target="_blank" rel="noopener">crashkit source</a>
-        {" · "}<a href="https://github.com/egnaro9/gradecore" target="_blank" rel="noopener">gradecore</a>
+        Built by <a href="https://egnaro9.github.io" target="erikhill-out">Erik Hill</a>
+        {" · "}<a href="https://github.com/egnaro9/crashkit" target="erikhill-out">crashkit source</a>
+        {" · "}<a href="https://github.com/egnaro9/gradecore" target="erikhill-out">gradecore</a>
         {" (the grading engine) · "}
-        <a href="https://egnaro9.github.io/model-drift/" target="_blank" rel="noopener">model-drift</a>
+        <a href="https://egnaro9.github.io/model-drift/" target="erikhill-out">model-drift</a>
         {" (the longitudinal board) · "}
-        <a href="https://egnaro9.github.io/rag-eval-lab/" target="_blank" rel="noopener">rag-eval-lab</a>
-        {" · "}<a href="https://agent-hub-exiz.onrender.com" target="_blank" rel="noopener">the constellation</a>
+        <a href="https://egnaro9.github.io/rag-eval-lab/" target="erikhill-out">rag-eval-lab</a>
+        {" · "}<a href="https://agent-hub-exiz.onrender.com" target="erikhill-out">the constellation</a>
       </p>
     </div>
   );
