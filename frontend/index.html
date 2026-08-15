@@ -160,13 +160,13 @@ function App() {
   useEffect(() => {
     fetch("/api/batteries").then(r => r.json()).then(bs => {
       setBatteries(bs); const b = bs.find(x => x.id === battery) || bs[0];
-      if (b) { setBattery(b.id); setModel(b.models[0]?.id || ""); }
+      if (b) { setBattery(b.id); setModel(b.id !== "agentic" ? "__byok__" : (b.models[0]?.id || "")); }
     });
     loadBoard();
   }, []);
 
   const onBattery = id => { setBattery(id); setRun(null); setErr("");
-    const b = batteries.find(x => x.id === id); setModel(b?.models[0]?.id || ""); };
+    const b = batteries.find(x => x.id === id); setModel(id !== "agentic" ? "__byok__" : (b?.models[0]?.id || "")); };
   const onProvider = p => setByok({ ...byok, provider: p, model: PROVIDERS[p].models[0] || "__custom__", customModel: "" });
 
   const runMock = async () => {
