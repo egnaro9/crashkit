@@ -244,6 +244,12 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
         def og_cover() -> FileResponse:
             return FileResponse(og, media_type="image/png")
 
+    fav = _FRONTEND / "favicon.svg"
+    if fav.exists():
+        @app.get("/favicon.svg")
+        def favicon() -> FileResponse:
+            return FileResponse(fav, media_type="image/svg+xml")
+
     return app
 
 
