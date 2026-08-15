@@ -15,6 +15,13 @@ Run the mocks with no key, or bring your own to test a real model.
 
 > **Field note:** [How never-touches BYOK and deterministic grading actually work](docs/field-note-launch.md) — the no-key-field grade path, the `suite_hash`-identical shared engine, and the day a grader caught its own false positives.
 
+> **Replayable evidence:** the frozen batteries' published results ship as a closed,
+> stamped bundle in [`vac/`](vac), registered in the
+> [vac-protocol registry](https://egnaro9.github.io/vac-protocol/)
+> ([registry.json](https://github.com/egnaro9/vac-protocol/blob/main/registry.json));
+> the ten-minute challenge path is
+> [REPLAY_REQUEST.md](https://github.com/egnaro9/vac-protocol/blob/main/REPLAY_REQUEST.md).
+
 <img src="docs/demo.gif" alt="The adversarial battery run against a deliberately-vulnerable mock: vulnerability 1.00, and one fail card per broken guarantee" width="100%">
 
 *Eight adversarial tasks against a deliberately-vulnerable mock — no API key, no network. The mock answers from a fixed profile, so every fail card reproduces byte-for-byte: `PYTHONPATH=../model-drift python3 -m demos.fail_cards`. [Play it as a terminal session](https://asciinema.org/a/1jMrzzjhacCRjt06) — the text is selectable.*
