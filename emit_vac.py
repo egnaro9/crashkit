@@ -72,6 +72,8 @@ CLI_ARTIFACTS = (
 
 # Which protocol.hashes entry pins each eval_run artifact's battery (its
 # `git_sha` field): the crashkit-battery-v1 stamp binding.
+VARIANCE_REPORT = "variance_flaky_n10.report.json"
+
 BATTERY_KEY = {
     "adversarial_safe.eval_run.json": "adversarial_battery",
     "adversarial_vulnerable.eval_run.json": "adversarial_battery",
@@ -174,7 +176,7 @@ def run_battery(python: str = sys.executable) -> dict[str, bytes]:
     out["grade_replay_vulnerable.eval_run.json"] = _dumps(to_eval_run(
         grade_answers("replay:vulnerable", ADVERSARIAL_BATTERY,
                       dict(_VULNERABLE_ANSWERS))))
-    out["variance_flaky_n10.report.json"] = _dumps(to_variance_report(
+    out[VARIANCE_REPORT] = _dumps(to_variance_report(
         run_n(flaky, ADVERSARIAL_BATTERY, 10, transport=flaky_transport)))
     return out
 
@@ -416,6 +418,14 @@ def build_manifest(artifacts: dict[str, bytes], commit: str) -> str:
                  "battery_hash_key": BATTERY_KEY[name],
                  "expect": derived[name]}
                 for name in sorted(derived)
+            ] + [
+                # The variance report was pinned by evidence and read by no
+                # check, while this bundle's capability sentence claimed it
+                # "aggregates reproducibly". vac-protocol's evidence-closure
+                # rule refuses that now, and rightly: an artifact nothing
+                # recomputes is not evidence, it is decoration.
+                {"profile": "crashkit-variance-v1",
+                 "artifact": VARIANCE_REPORT}
             ],
         },
         "replay": {
