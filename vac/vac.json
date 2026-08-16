@@ -26,7 +26,7 @@
  },
  "protocol": {
   "issuer": "egnaro9/crashkit",
-  "issuer_commit": "c94f6d2",
+  "issuer_commit": "a71da57",
   "task": "mock/replay battery runs + grading-replay + 10-run variance over the three frozen batteries",
   "hashes": {
    "adversarial_battery": "ace96377ed90",
@@ -203,14 +203,18 @@
      "graded": 35,
      "errors": 0
     }
+   },
+   {
+    "profile": "crashkit-variance-v1",
+    "artifact": "variance_flaky_n10.report.json"
    }
   ]
  },
  "replay": {
-  "issuer_commit": "c94f6d2",
+  "issuer_commit": "a71da57",
   "commands": [
    "git clone https://github.com/egnaro9/model-drift && git -C model-drift checkout 3df0ccb",
-   "git clone https://github.com/egnaro9/crashkit issuer && git -C issuer checkout c94f6d2",
+   "git clone https://github.com/egnaro9/crashkit issuer && git -C issuer checkout a71da57",
    "python -m pip install gradecore==0.10.0 ./model-drift ./issuer",
    "( cd issuer && python emit_vac.py )",
    "for f in adversarial_safe.eval_run.json adversarial_vulnerable.eval_run.json agentic_safe.eval_run.json agentic_vulnerable.eval_run.json grade_replay_safe.eval_run.json grade_replay_vulnerable.eval_run.json suite_stable.eval_run.json variance_flaky_n10.report.json vac.json; do cmp issuer/vac/$f $f || exit 1; done"
