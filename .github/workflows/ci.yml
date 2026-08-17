@@ -27,6 +27,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install gradecore==0.10.0
           pip install git+https://github.com/egnaro9/model-drift@3df0ccb5d0b8e72075632508c186795df583a37d
+          # rag-eval-lab is required so the cross-repo grounding proof RUNS.
+          # Without it the test importorskips and the suite reports green for a
+          # bridge claim that never executed. A skipped proof is not a proof.
+          pip install git+https://github.com/egnaro9/rag-eval-lab
           pip install -e ".[dev]"
       # The whole point is a grade that reproduces, so the suite includes a test
       # asserting a serialized run is byte-identical across runs (no LLM judge,

@@ -50,12 +50,28 @@ def test_grounding_here_is_the_same_engine_rag_eval_lab_reports():
     """The bridge claim, as a test: crashkit's grounding verdict and the metric
     rag-eval-lab publishes are one function, not two implementations.
 
-    Skipped where rag-eval-lab isn't installed (crashkit doesn't depend on it) —
-    it's a cross-repo proof, run wherever both are present.
+    Skipped where rag-eval-lab isn't installed (crashkit doesn't depend on it),
+    it's a cross-repo proof, run wherever both are present. But NOT skippable in
+    CI: until 2026-08-17 CI never installed rag-eval-lab, so this test skipped on
+    every automated run and the bridge claim was published on the strength of a
+    proof that had never once executed. `importorskip` turns a missing dependency
+    into a green suite, which is the exact failure this repo exists to catch.
     """
+    import os
     import pytest
     from gradecore import grounding_score
-    faithfulness = pytest.importorskip("ragevallab.evals").faithfulness
+
+    try:
+        from ragevallab.evals import faithfulness
+    except ImportError:  # pragma: no cover - exercised by the local-dev path only
+        if os.environ.get("CI"):
+            raise AssertionError(
+                "rag-eval-lab is not installed, so the cross-repo grounding proof "
+                "cannot run. In CI that is a failure, not a skip: install it (see "
+                ".github/workflows/ci.yml) rather than letting the suite report "
+                "green for a claim nothing checked.")
+        pytest.skip("rag-eval-lab not installed; cross-repo proof runs in CI and "
+                    "wherever both repos are present")
 
     for t in RETRIEVAL_BATTERY:
         answer = "It carries a magnetometer and an ice-penetrating radar."
