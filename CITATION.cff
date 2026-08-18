@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+title: "crashkit: deterministic adversarial testing for LLM applications"
+message: >-
+  If you use this software, please cite it using the metadata from this file.
+  Cite the archived release rather than the repository: a result belongs to the
+  exact code that produced it, not to whatever main happens to hold later.
+type: software
+authors:
+  - given-names: Erik
+    family-names: Hill
+    orcid: "https://orcid.org/0009-0002-5912-967X"
+    email: erik@erikhill.dev
+repository-code: "https://github.com/egnaro9/crashkit"
+url: "https://erikhill.dev"
+abstract: >-
+  AI Crash Test: an interactive, deterministic (no-LLM-judge) LLM stress-
+  test. The adversarial lens on the same engine as model-drift.
+keywords:
+  - adversarial testing
+  - LLM evaluation
+  - deterministic grading
+  - red teaming
+  - software testing
+license: MIT
