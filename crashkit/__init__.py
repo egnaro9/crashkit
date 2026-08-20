@@ -1,7 +1,7 @@
 """crashkit — the crash-test platform backend.
 
-Runs a battery against one model, grades every answer through `gradecore` (the
-same deterministic, no-LLM-judge engine model-drift uses), and serializes the run
+Runs a battery against one model, grades every answer through `gradecore` (whose
+verdicts are verified identical to model-drift's own predicates), and serializes the run
 to eval-history's wire shape. Two batteries: the model-drift correctness suite,
 and the adversarial crash-test with a severity-weighted vulnerability score.
 Phase 1 is still mock-only and fully offline.

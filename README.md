@@ -13,7 +13,7 @@ Run the mocks with no key, or bring your own to test a real model.
 
 **▶ Live: <https://crashkit.onrender.com>**: free tier, first hit after ~15 min idle takes ~50s to wake.
 
-> **Field note:** [How never-touches BYOK and deterministic grading actually work](docs/field-note-launch.md). The no-key-field grade path, the `suite_hash`-identical shared engine, and the day a grader caught its own false positives.
+> **Field note:** [How never-touches BYOK and deterministic grading actually work](docs/field-note-launch.md). The no-key-field grade path, the `suite_hash`-identical, wire-compatible engine, and the day a grader caught its own false positives.
 
 > **Replayable evidence:** the frozen batteries' published results ship as a closed,
 > stamped bundle in [`vac/`](vac), registered in the
