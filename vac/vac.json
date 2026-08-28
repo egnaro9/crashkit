@@ -1,5 +1,5 @@
 {
- "vac_version": "0.1",
+ "vac_version": "0.2",
  "claim": {
   "capability": "crashkit's no-LLM-judge battery grading is deterministic end-to-end and its graders demonstrably bite: the adversarial and agentic twin-control mock runs score exactly 0.0 (safe) and 1.0 (vulnerable) severity-weighted vulnerability, the reused 35-task model-drift suite grades 1.0 accuracy on its stable mock, the never-touches grading-replay path re-earns 0.0/1.0 from the committed answer sets alone, and a 10-run flaky-mock variance report aggregates reproducibly \u2014 every declared number recomputable offline from committed per-case rows",
   "scope": "exactly the committed mock/replay grading path at the stamped commit: the frozen adversarial battery (2026-07-v2), the frozen agentic battery (2026-07-v1), and model-drift's reused frozen SUITE (fingerprint-identical to model-drift's own), all graded by gradecore 0.10.0 predicates; deterministic throughout: no key, no network, no LLM judge, no sampling, no clock",
@@ -26,7 +26,7 @@
  },
  "protocol": {
   "issuer": "egnaro9/crashkit",
-  "issuer_commit": "a71da57",
+  "issuer_commit": "2405a18",
   "task": "mock/replay battery runs + grading-replay + 10-run variance over the three frozen batteries",
   "hashes": {
    "adversarial_battery": "ace96377ed90",
@@ -54,15 +54,15 @@
    "sha256": "488aac3787d572f0f261b0bc738ded555385dd4411e765acec47d330efc3997f"
   },
   {
-   "path": "grade_replay_safe.eval_run.json",
+   "path": "grading_replay_safe.eval_run.json",
    "sha256": "4cafacb21e7a2887eeddd33c1dac9eab77946efe2303e9d93d11dfeb307c2760"
   },
   {
-   "path": "grade_replay_vulnerable.eval_run.json",
+   "path": "grading_replay_vulnerable.eval_run.json",
    "sha256": "11d375ab7112cccb6685be1780af2f134cfc9711d1f2b31a07df1f077c72e97c"
   },
   {
-   "path": "suite_stable.eval_run.json",
+   "path": "modeldrift_suite.eval_run.json",
    "sha256": "8373704a0961a34c8a95f2887bd03660316385c5bf58e527ce0ae4b936ffc13e"
   },
   {
@@ -72,19 +72,23 @@
  ],
  "results": {
   "summary": {
-   "twin_controls": {
-    "adversarial": {
-     "safe_vulnerability": 0.0,
-     "vulnerable_vulnerability": 1.0
-    },
-    "agentic": {
-     "safe_vulnerability": 0.0,
-     "vulnerable_vulnerability": 1.0
-    }
+   "adversarial_safe": {
+    "vulnerability_score": 0.0
    },
-   "grading_replay": {
-    "safe_vulnerability": 0.0,
-    "vulnerable_vulnerability": 1.0
+   "adversarial_vulnerable": {
+    "vulnerability_score": 1.0
+   },
+   "agentic_safe": {
+    "vulnerability_score": 0.0
+   },
+   "agentic_vulnerable": {
+    "vulnerability_score": 1.0
+   },
+   "grading_replay_safe": {
+    "vulnerability_score": 0.0
+   },
+   "grading_replay_vulnerable": {
+    "vulnerability_score": 1.0
    },
    "modeldrift_suite": {
     "accuracy": 1.0,
@@ -158,7 +162,7 @@
    },
    {
     "profile": "crashkit-battery-v1",
-    "artifact": "grade_replay_safe.eval_run.json",
+    "artifact": "grading_replay_safe.eval_run.json",
     "battery_hash_key": "adversarial_battery",
     "expect": {
      "accuracy": 1.0,
@@ -174,7 +178,7 @@
    },
    {
     "profile": "crashkit-battery-v1",
-    "artifact": "grade_replay_vulnerable.eval_run.json",
+    "artifact": "grading_replay_vulnerable.eval_run.json",
     "battery_hash_key": "adversarial_battery",
     "expect": {
      "accuracy": 0.0,
@@ -190,7 +194,7 @@
    },
    {
     "profile": "crashkit-battery-v1",
-    "artifact": "suite_stable.eval_run.json",
+    "artifact": "modeldrift_suite.eval_run.json",
     "battery_hash_key": "modeldrift_suite",
     "expect": {
      "accuracy": 1.0,
@@ -211,13 +215,13 @@
   ]
  },
  "replay": {
-  "issuer_commit": "a71da57",
+  "issuer_commit": "2405a18",
   "commands": [
    "git clone https://github.com/egnaro9/model-drift && git -C model-drift checkout 3df0ccb",
-   "git clone https://github.com/egnaro9/crashkit issuer && git -C issuer checkout a71da57",
+   "git clone https://github.com/egnaro9/crashkit issuer && git -C issuer checkout 2405a18",
    "python -m pip install gradecore==0.10.0 ./model-drift ./issuer",
    "( cd issuer && python emit_vac.py )",
-   "for f in adversarial_safe.eval_run.json adversarial_vulnerable.eval_run.json agentic_safe.eval_run.json agentic_vulnerable.eval_run.json grade_replay_safe.eval_run.json grade_replay_vulnerable.eval_run.json suite_stable.eval_run.json variance_flaky_n10.report.json vac.json; do cmp issuer/vac/$f $f || exit 1; done"
+   "for f in adversarial_safe.eval_run.json adversarial_vulnerable.eval_run.json agentic_safe.eval_run.json agentic_vulnerable.eval_run.json grading_replay_safe.eval_run.json grading_replay_vulnerable.eval_run.json modeldrift_suite.eval_run.json variance_flaky_n10.report.json vac.json; do cmp issuer/vac/$f $f || exit 1; done"
   ],
   "expected": "every command exits 0 and every cmp stays silent: the emitter re-runs the four crashkit.cli battery subprocesses and the three in-process grading paths at the stamped commit and re-emits all eight artifacts plus vac.json byte-identical to this bundle (commands run from the bundle directory). The emitter itself refuses a dirty tree, refuses a payload whose metrics disagree with its own case rows, and refuses any twin control off its exact 0.0/1.0 score \u2014 so a successful replay re-earns the controls, not just the bytes."
  }
