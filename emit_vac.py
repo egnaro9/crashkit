@@ -9,9 +9,9 @@ can re-earn offline with no key and no network:
     adversarial_vulnerable.eval_run.json    …same, --profile vulnerable
     agentic_safe.eval_run.json              …--battery agentic --profile safe
     agentic_vulnerable.eval_run.json        …same, --profile vulnerable
-    suite_stable.eval_run.json              run(mock:stable) over model-drift's reused frozen SUITE
-    grade_replay_safe.eval_run.json         grade_answers() over the committed safe answer set
-    grade_replay_vulnerable.eval_run.json   …over the committed vulnerable answer set
+    modeldrift_suite.eval_run.json              run(mock:stable) over model-drift's reused frozen SUITE
+    grading_replay_safe.eval_run.json         grade_answers() over the committed safe answer set
+    grading_replay_vulnerable.eval_run.json   …over the committed vulnerable answer set
     variance_flaky_n10.report.json          to_variance_report(run_n(mock:flaky, 10))
 
 The four CLI artifacts are the exact bytes the command line a stranger
@@ -74,14 +74,44 @@ CLI_ARTIFACTS = (
 # `git_sha` field): the crashkit-battery-v1 stamp binding.
 VARIANCE_REPORT = "variance_flaky_n10.report.json"
 
+def _scope(artifact: str) -> str:
+    """The scope VAC 2.5.1 derives from an artifact filename: everything
+    before the first dot. Computed here from the same string used as the
+    check's `artifact`, so the published path cannot drift from the file it
+    is derived from. Rename the file and the summary key follows."""
+    return artifact.split(".")[0]
+
+
+# WHICH numbers this bundle publishes, and under which artifact's scope.
+# The keys are artifact filenames, so a rename moves the public path with
+# the file rather than leaving a stale name behind.
+#
+# variance_flaky_n10.report.json is DELIBERATELY ABSENT. Its mean is over
+# per-run scores its own rows cannot re-derive, so it carries no structural
+# check, and a bundle must not publish a bound capability path for a number
+# no check recomputes. Its absence here is a decision, not an oversight:
+# the report stays pinned by sha256 and covered by replay byte-identity,
+# and it makes no v0.2 claim. Adding it would require a profile that can
+# recompute it first.
+PUBLISHED = {
+    "adversarial_safe.eval_run.json": ("vulnerability_score",),
+    "adversarial_vulnerable.eval_run.json": ("vulnerability_score",),
+    "agentic_safe.eval_run.json": ("vulnerability_score",),
+    "agentic_vulnerable.eval_run.json": ("vulnerability_score",),
+    "grading_replay_safe.eval_run.json": ("vulnerability_score",),
+    "grading_replay_vulnerable.eval_run.json": ("vulnerability_score",),
+    "modeldrift_suite.eval_run.json": ("accuracy", "n_cases"),
+}
+
+
 BATTERY_KEY = {
     "adversarial_safe.eval_run.json": "adversarial_battery",
     "adversarial_vulnerable.eval_run.json": "adversarial_battery",
     "agentic_safe.eval_run.json": "agentic_battery",
     "agentic_vulnerable.eval_run.json": "agentic_battery",
-    "grade_replay_safe.eval_run.json": "adversarial_battery",
-    "grade_replay_vulnerable.eval_run.json": "adversarial_battery",
-    "suite_stable.eval_run.json": "modeldrift_suite",
+    "grading_replay_safe.eval_run.json": "adversarial_battery",
+    "grading_replay_vulnerable.eval_run.json": "adversarial_battery",
+    "modeldrift_suite.eval_run.json": "modeldrift_suite",
 }
 
 # The twin-control gate: artifact -> (derived field, exact required value).
@@ -91,9 +121,9 @@ TWIN_GATE = {
     "adversarial_vulnerable.eval_run.json": ("vulnerability_score", 1.0),
     "agentic_safe.eval_run.json": ("vulnerability_score", 0.0),
     "agentic_vulnerable.eval_run.json": ("vulnerability_score", 1.0),
-    "grade_replay_safe.eval_run.json": ("vulnerability_score", 0.0),
-    "grade_replay_vulnerable.eval_run.json": ("vulnerability_score", 1.0),
-    "suite_stable.eval_run.json": ("accuracy", 1.0),
+    "grading_replay_safe.eval_run.json": ("vulnerability_score", 0.0),
+    "grading_replay_vulnerable.eval_run.json": ("vulnerability_score", 1.0),
+    "modeldrift_suite.eval_run.json": ("accuracy", 1.0),
 }
 
 # Every path whose bytes can change the emitted artifacts. tests/ and prose
@@ -169,11 +199,11 @@ def run_battery(python: str = sys.executable) -> dict[str, bytes]:
 
     stable = Model("mock:stable", "Mock", "mock", "mock", "NONE")
     flaky = Model("mock:flaky", "Flaky", "mock", "flaky", "NONE")
-    out["suite_stable.eval_run.json"] = _dumps(to_eval_run(run(stable)))
-    out["grade_replay_safe.eval_run.json"] = _dumps(to_eval_run(
+    out["modeldrift_suite.eval_run.json"] = _dumps(to_eval_run(run(stable)))
+    out["grading_replay_safe.eval_run.json"] = _dumps(to_eval_run(
         grade_answers("replay:safe", ADVERSARIAL_BATTERY,
                       dict(_SAFE_ANSWERS))))
-    out["grade_replay_vulnerable.eval_run.json"] = _dumps(to_eval_run(
+    out["grading_replay_vulnerable.eval_run.json"] = _dumps(to_eval_run(
         grade_answers("replay:vulnerable", ADVERSARIAL_BATTERY,
                       dict(_VULNERABLE_ANSWERS))))
     out[VARIANCE_REPORT] = _dumps(to_variance_report(
@@ -292,7 +322,7 @@ def build_manifest(artifacts: dict[str, bytes], commit: str) -> str:
                 "regression; refusing to publish a different claim")
         derived[name] = d
     manifest = {
-        "vac_version": "0.1",
+        "vac_version": "0.2",
         "claim": {
             "capability": (
                 "crashkit's no-LLM-judge battery grading is deterministic "
@@ -382,35 +412,21 @@ def build_manifest(artifacts: dict[str, bytes], commit: str) -> str:
             for name, data in sorted(artifacts.items())
         ],
         "results": {
+            # VAC 2.5.1: at vac_version 0.2 a summary number binds on its
+            # FULL path beneath `summary.`, against a pool keyed
+            # <scope>.<field>, and the verifier DERIVES each scope from that
+            # check's own evidence filename. So the summary is exactly two
+            # levels deep and its top keys ARE the artifact stems.
+            #
+            # Under 0.1 these numbers were not bound to the arm that earned
+            # them: pools merged by bare field name, this profile runs seven
+            # times, and vulnerability_score therefore pooled to {0.0, 1.0}.
+            # Either arm satisfied either value, and accuracy and n_cases
+            # were no better off despite binding "strictly".
             "summary": {
-                "twin_controls": {
-                    "adversarial": {
-                        "safe_vulnerability": derived[
-                            "adversarial_safe.eval_run.json"][
-                            "vulnerability_score"],
-                        "vulnerable_vulnerability": derived[
-                            "adversarial_vulnerable.eval_run.json"][
-                            "vulnerability_score"]},
-                    "agentic": {
-                        "safe_vulnerability": derived[
-                            "agentic_safe.eval_run.json"][
-                            "vulnerability_score"],
-                        "vulnerable_vulnerability": derived[
-                            "agentic_vulnerable.eval_run.json"][
-                            "vulnerability_score"]},
-                },
-                "grading_replay": {
-                    "safe_vulnerability": derived[
-                        "grade_replay_safe.eval_run.json"][
-                        "vulnerability_score"],
-                    "vulnerable_vulnerability": derived[
-                        "grade_replay_vulnerable.eval_run.json"][
-                        "vulnerability_score"]},
-                "modeldrift_suite": {
-                    "accuracy": derived["suite_stable.eval_run.json"][
-                        "accuracy"],
-                    "n_cases": derived["suite_stable.eval_run.json"][
-                        "n_cases"]},
+                _scope(name): {field: derived[name][field]
+                               for field in fields}
+                for name, fields in PUBLISHED.items()
             },
             "checks": [
                 {"profile": "crashkit-battery-v1",
@@ -441,9 +457,9 @@ def build_manifest(artifacts: dict[str, bytes], commit: str) -> str:
                 "for f in adversarial_safe.eval_run.json "
                 "adversarial_vulnerable.eval_run.json "
                 "agentic_safe.eval_run.json agentic_vulnerable.eval_run.json "
-                "grade_replay_safe.eval_run.json "
-                "grade_replay_vulnerable.eval_run.json "
-                "suite_stable.eval_run.json variance_flaky_n10.report.json "
+                "grading_replay_safe.eval_run.json "
+                "grading_replay_vulnerable.eval_run.json "
+                "modeldrift_suite.eval_run.json variance_flaky_n10.report.json "
                 "vac.json; do cmp issuer/vac/$f $f || exit 1; done",
             ],
             "expected": (
@@ -459,7 +475,41 @@ def build_manifest(artifacts: dict[str, bytes], commit: str) -> str:
                 "controls, not just the bytes."),
         },
     }
+    _refuse_unbindable_summary(manifest)
     return json.dumps(manifest, indent=1) + "\n"
+
+
+def _refuse_unbindable_summary(manifest: dict) -> None:
+    """Every published number must sit at EXACTLY <scope>.<field>.
+
+    VAC 2.5.1 binds a 0.2 summary value on its full path beneath `summary.`,
+    and a pool key is two segments. A third level does not error anywhere: it
+    simply matches no pool key, and the verifier reports "no check recomputes
+    it" about a number a check plainly recomputes. That is a true refusal
+    with a misleading cause, and it would be found by a stranger rather than
+    here. So the emitter refuses first, naming depth as the reason.
+
+    Also refuses a scope that is not one of the artifacts it claims to come
+    from, which is what would happen if the summary were hand-edited after a
+    rename."""
+    scopes = {_scope(name) for name in PUBLISHED}
+    for scope, fields in manifest["results"]["summary"].items():
+        if scope not in scopes:
+            raise ValueError(
+                f"summary scope {scope!r} is not an artifact this bundle "
+                f"publishes ({sorted(scopes)}). A 0.2 scope is DERIVED from "
+                "an evidence filename; it cannot be chosen.")
+        if not isinstance(fields, dict):
+            raise ValueError(
+                f"summary.{scope} must be an object of <field>: <number>, "
+                f"got {type(fields).__name__}. A 0.2 path is exactly "
+                "<scope>.<field>.")
+        for field, value in fields.items():
+            if isinstance(value, (dict, list)):
+                raise ValueError(
+                    f"summary.{scope}.{field} nests deeper than <scope>."
+                    "<field>, so no pool key can match it and it would be "
+                    "published UNBOUND. Flatten it or leave it out.")
 
 
 def emit() -> None:
