@@ -1,0 +1,13 @@
+# The VAC replay pin, as a pip CONSTRAINT rather than a bare install argument.
+#
+# `pip install gradecore==0.10.0` binds one install command. It does not bind the
+# ones after it. crashkit installed the pin, then installed rag-eval-lab, which
+# declared `gradecore @ git+.../gradecore`; pip gives a direct URL precedence and
+# replaced the pin with whatever the default branch was. gradecore main reached
+# 0.10.1 on 2026-08-19 and crashkit CI went red on 08-20 for ten days, naming this
+# pin as the thing out of alignment. A constraint binds the whole resolution, so a
+# dependency that reintroduces an unpinned direct URL cannot quietly win.
+#
+# This must stay equal to GRADECORE_PIN in emit_vac.py. The CI assertion reads the
+# version out of THIS file rather than repeating it, so the two cannot drift apart.
+gradecore==0.10.0
