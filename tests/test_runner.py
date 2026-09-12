@@ -39,6 +39,44 @@ def test_the_lift_preserves_every_task_id_and_prompt():
     assert battery_hash(modeldrift_battery()) == md_hash()
 
 
+def test_the_lift_runs_the_vendored_predicate_itself():
+    """The half of the lift no fingerprint covers: `grade`.
+
+    battery_hash is id:prompt only, so a lift that swapped any task's predicate
+    for `lambda _: True` moves no fingerprint, no artifact byte and no bundle
+    byte. Only two of the 35 are caught by anything else in this repo, via the
+    drifted-mock test above.
+
+    This compares each lifted grader against the vendored predicate directly,
+    over a probe corpus, in both directions. The vendored predicate is itself
+    pinned by sha256 in tests/test_vendor_fidelity.py, so the chain closes: the
+    manifest pins the predicate bytes, this pins the lift to those predicates.
+    Neither one alone covers the grader crashkit actually runs.
+    """
+    from gradecore import GradeInput
+
+    from crashkit._vendor.modeldrift.providers import _MOCK_ANSWERS
+    from crashkit._vendor.modeldrift.suite import SUITE
+
+    # Generic probes plus the mock's own per-task answers, so every predicate
+    # sees at least one input it must accept and several it must not.
+    probes = ["", "yes", "no", "42", "I'm not sure I can help with that.",
+              '{"ok": true}', "the signal is clear", "3.14", "Paris", "blue",
+              *_MOCK_ANSWERS.values()]
+
+    battery = modeldrift_battery()
+    assert [b.id for b in battery] == [t.id for t in SUITE]
+    for lifted, task in zip(battery, SUITE):
+        assert lifted.kind == task.kind
+        for probe in probes:
+            verdict = lifted.grader(GradeInput(text=probe, prompt=lifted.prompt))
+            assert verdict.passed == bool(task.grade(probe)), (
+                f"{lifted.id}: the lifted grader disagrees with the vendored "
+                f"predicate on {probe!r}. The battery is not running "
+                "model-drift's own grade function.")
+            assert verdict.grader_id == task.kind
+
+
 def test_serialization_is_eval_history_shaped():
     ev = to_eval_run(run(STABLE))
     assert set(ev) >= {"run", "git_sha", "label", "source", "metrics", "cases"}

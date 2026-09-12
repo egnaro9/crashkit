@@ -39,10 +39,15 @@ def test_the_manifest_covers_every_vendored_python_file():
     # A digest list is only a guard while it is COMPLETE. Without this, a new
     # file dropped into the vendored tree is unlisted, unchecked, and silently
     # importable, and the fidelity test above still passes.
+    # Every file, not just *.py: a .so, a .pth or a data file dropped in here
+    # would be unlisted, unhashed by the emitter, never cmp'd by the replay,
+    # and importable.
     on_disk = {
         str(p.relative_to(VENDOR))
-        for p in VENDOR.rglob("*.py")
-        if p.parent != VENDOR          # _vendor/__init__.py is crashkit's own
+        for p in VENDOR.rglob("*")
+        if p.is_file()
+        and "__pycache__" not in p.parts
+        and p.parent != VENDOR   # _vendor/__init__.py and the manifest are ours
     }
     assert on_disk == set(_manifest()["files"]), (
         "the vendored tree and MODELDRIFT_FIDELITY.json disagree about which "

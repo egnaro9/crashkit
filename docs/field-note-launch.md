@@ -2,7 +2,7 @@
 
 > A launch write-up for [crashkit](https://github.com/egnaro9/crashkit), engineer to engineer. Longer and more technical than the social posts: the never-touches BYOK architecture, the no-LLM-judge grade path, the shared-engine `suite_hash` proof, and the day a grader caught its own false positives. Every engineering claim below is reproducible from the repo — commands at the end. (The two real-model numbers in the false-positives story are historical run results, flagged as such: they need a key, and the buggy ~29% no longer exists once the graders were fixed.)
 
-**Live:** https://crashkit.onrender.com (free tier — first hit after ~15 min idle takes ~50s to wake)
+**Hosted demo:** currently offline. Clone and run it locally, commands at the end. Nothing claimed below depends on it.
 **Source:** [`egnaro9/crashkit`](https://github.com/egnaro9/crashkit) · the grader engine: [`egnaro9/gradecore`](https://github.com/egnaro9/gradecore)
 
 ---
@@ -124,7 +124,7 @@ That means the comparison above now reads one copy of the suite from both sides.
 That second claim moved to a per-file digest. `crashkit/_vendor/MODELDRIFT_FIDELITY.json` records the source commit and a sha256 for every vendored file, `tests/test_vendor_fidelity.py` fails if the bytes on disk drift from it, and the bundle's replay block clones model-drift at that commit and `cmp`s each file. Check it without cloning anything:
 
 ```bash
-git cat-file blob 3df0ccb:modeldrift/suite.py | shasum -a 256
+curl -sL https://raw.githubusercontent.com/egnaro9/model-drift/3df0ccb5d0b8e72075632508c186795df583a37d/modeldrift/suite.py | shasum -a 256
 # bfdf98dfa4178ffcabaf3b5964d5a88fb8853c4734d12f10d1982a8cc4454231
 ```
 
@@ -154,7 +154,7 @@ And the clean case checks out independently: a separate real-model run — `clau
 
 ## Run and verify it yourself
 
-Fastest path, no install: open the hosted playground at **https://crashkit.onrender.com** — pick a battery and a dummy, hit **Run the battery**, and do the DevTools → Network check right there. To reproduce from source instead:
+The hosted playground is currently offline, so the fastest path is from source. The DevTools Network check described above works the same way against a local instance:
 
 ```bash
 git clone https://github.com/egnaro9/crashkit && cd crashkit
@@ -165,7 +165,7 @@ pip install -e ../gradecore -e ".[dev]"
 # model-drift needs no clone: the two modules crashkit uses are vendored
 # at crashkit/_vendor/modeldrift and checked against their source commit.
 
-pytest -q                 # 23 passed  (gradecore's own suite is 23 too; each repo runs its suite in CI on every push/PR)
+pytest -q                 # offline, no key (each repo runs its suite in CI on every push/PR)
 uvicorn crashkit.app:app --port 8011
 # open http://localhost:8011 — pick a battery + dummy, hit "Run the battery"
 ```

@@ -13,7 +13,7 @@ are checkable, so this checks them:
 Nothing here is asserted in prose: every line prints a value the repos compute.
 Offline, no API key.
 
-    PYTHONPATH=../model-drift:../rag-eval-lab python3 -m demos.one_system
+    PYTHONPATH=../rag-eval-lab python3 -m demos.one_system
 """
 
 import dataclasses
@@ -66,7 +66,7 @@ print("  " + (ok(f"{len(_fid['files'])} vendored files match their recorded "
                  "sha256") if _clean
               else fail("TAMPERED: a vendored file no longer matches upstream")))
 print("  " + muted("this is what replaced the git pin. Check it yourself: "
-                   "git cat-file blob <commit>:modeldrift/suite.py | shasum -a 256"))
+                   "curl the raw file at that commit and shasum it"))
 
 rule("rag-eval-lab's faithfulness IS gradecore's grounder")
 delegates = grounding_score.__name__ in inspect.getsource(ragevallab.faithfulness)

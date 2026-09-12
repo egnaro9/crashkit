@@ -2,9 +2,10 @@
 # one origin. Render serves it over HTTPS automatically, which is mandatory for a
 # BYOK page (on plain HTTP a man-in-the-middle could inject key-stealing JS).
 #
-# gradecore (the deterministic grader engine) is installed from git. The reused
-# model-drift suite + mock provider are vendored at crashkit/_vendor/modeldrift (
-# mock transport) install from their own repos at build time.
+# gradecore (the deterministic grader engine) installs from git at build time.
+# The reused model-drift suite and mock transport are not installed at all:
+# they are vendored at crashkit/_vendor/modeldrift and pinned by per-file
+# sha256 in MODELDRIFT_FIDELITY.json.
 #
 # The run store is in-memory, so the leaderboard is per-session and resets on
 # restart. A persistent datastore + abuse hardening (rate limits, spend caps) are
