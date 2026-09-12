@@ -1,5 +1,10 @@
 {
   "name": "crashkit",
+  // Pinned so a deploy cannot land in the wrong Cloudflare account.
+  // This is erik.hill0987@gmail.com. The other account on this machine
+  // is lonimoonfairy (72f7ad2bcbfe5daadbfe677d61568028); erikhill.dev was
+  // moved off it on 2026-09-12 and nothing of Erik's should go back.
+  "account_id": "4705fd918037663060a5d81780fac669",
   "main": "entry.py",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["python_workers"],
@@ -7,5 +12,16 @@
   // card and the favicon are served by the assets binding instead. They resolve
   // before the Worker runs; crashkit/app.py registers those three routes only
   // when the directory exists on disk, so nothing double-serves them.
-  "assets": { "directory": "../frontend" }
+  "assets": { "directory": "../frontend" },
+  // Custom domain on the erikhill.dev zone, which lives in the same account as
+  // this Worker. That is a hard requirement, and the reason the zone had to be
+  // moved out of lonimoonfairy first. Cloudflare creates and manages the DNS
+  // record for this hostname itself; do not add one by hand.
+  //
+  // Note this record IS proxied, unavoidably, because the Worker runs at the
+  // edge. That does not conflict with the apex, which stays DNS only for
+  // GitHub Pages: they are different hostnames.
+  "routes": [
+    { "pattern": "crashkit.erikhill.dev", "custom_domain": true }
+  ]
 }

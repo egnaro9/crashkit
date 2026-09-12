@@ -2,7 +2,7 @@
 
 > A launch write-up for [crashkit](https://github.com/egnaro9/crashkit), engineer to engineer. Longer and more technical than the social posts: the never-touches BYOK architecture, the no-LLM-judge grade path, the shared-engine `suite_hash` proof, and the day a grader caught its own false positives. Every engineering claim below is reproducible from the repo — commands at the end. (The two real-model numbers in the false-positives story are historical run results, flagged as such: they need a key, and the buggy ~29% no longer exists once the graders were fixed.)
 
-**Hosted demo:** currently offline. Clone and run it locally, commands at the end. Nothing claimed below depends on it.
+**Live:** https://crashkit.erikhill.dev (Cloudflare Workers, no cold start; the mock models need no key)
 **Source:** [`egnaro9/crashkit`](https://github.com/egnaro9/crashkit) · the grader engine: [`egnaro9/gradecore`](https://github.com/egnaro9/gradecore)
 
 ---
@@ -154,7 +154,7 @@ And the clean case checks out independently: a separate real-model run — `clau
 
 ## Run and verify it yourself
 
-The hosted playground is currently offline, so the fastest path is from source. The DevTools Network check described above works the same way against a local instance:
+Fastest path, no install: open the hosted playground at **https://crashkit.erikhill.dev**, pick a battery and a dummy, hit **Run the battery**, and do the DevTools Network check right there. To reproduce from source instead:
 
 ```bash
 git clone https://github.com/egnaro9/crashkit && cd crashkit

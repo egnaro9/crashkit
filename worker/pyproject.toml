@@ -15,8 +15,9 @@ dependencies = [
 
 [tool.uv.sources]
 # pywrangler installs binary-only (--no-build), so this is the BUILT wheel,
-# not the source tree. Rebuild it after any change under crashkit/:
-#     python -m build --wheel --outdir worker/dist
+# not the source tree. After any change under crashkit/, run worker/build.sh,
+# which rebuilds AND re-locks. Doing only the rebuild leaves uv.lock pinning
+# the previous wheel's hash and every `uv run` then fails on a hash mismatch.
 # The wheel is what proves the vendored model-drift tree actually ships;
 # an editable install would hide a missing entry in [tool.setuptools].
 crashkit = { path = "dist/crashkit-0.1.0-py3-none-any.whl" }
