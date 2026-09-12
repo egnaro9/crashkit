@@ -11,9 +11,14 @@ license = { text = "MIT" }
 authors = [{ name = "Erik Hill", email = "erik.hill0987@gmail.com" }]
 # gradecore comes from PyPI. fastapi/uvicorn power the run store + playground
 # API (Phase 0.5). model-drift is vendored, see the note below.
+# The SERVING path needs fastapi and gradecore, nothing else. uvicorn is NOT
+# here: it is one way to run this ASGI app, not part of it, and a Cloudflare
+# Worker supplies its own server. Keeping it as a hard dependency made the
+# Worker unbuildable, because uvicorn[standard] pulls httptools, which has no
+# Pyodide wheel. It lives in the `serve` extra below, which `dev` includes, so
+# every documented local command is unchanged.
 dependencies = [
     "fastapi>=0.110",
-    "uvicorn[standard]>=0.27",
     # The shared grading engine, from PyPI. A git@main dependency is a moving
     # ref, and the replay CI proved it: pip cannot reconcile a direct-URL
     # requirement with the pinned local clone the replay installs.
@@ -35,7 +40,8 @@ dependencies = [
 # tests/test_vendor_fidelity.py. Nothing needs installing for local work.
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "httpx>=0.27"]
+serve = ["uvicorn[standard]>=0.27"]
+dev = ["pytest>=7", "httpx>=0.27", "uvicorn[standard]>=0.27"]
 
 [tool.setuptools]
 # The vendored tree must be listed explicitly. An unlisted subpackage is

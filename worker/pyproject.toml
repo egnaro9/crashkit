@@ -1,0 +1,22 @@
+[project]
+name = "crashkit-worker"
+version = "0.1.0"
+requires-python = ">=3.12"
+# gradecore is pinned to the same release emit_vac.py demands. crashkit comes
+# from the repo root, which carries the vendored model-drift source under
+# crashkit/_vendor; model-drift is deliberately not a dependency and could not
+# be installed from git here in any case.
+dependencies = [
+    "workers-py",
+    "fastapi",
+    "gradecore==0.10.2",
+    "crashkit",
+]
+
+[tool.uv.sources]
+# pywrangler installs binary-only (--no-build), so this is the BUILT wheel,
+# not the source tree. Rebuild it after any change under crashkit/:
+#     python -m build --wheel --outdir worker/dist
+# The wheel is what proves the vendored model-drift tree actually ships;
+# an editable install would hide a missing entry in [tool.setuptools].
+crashkit = { path = "dist/crashkit-0.1.0-py3-none-any.whl" }

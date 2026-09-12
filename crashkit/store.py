@@ -7,6 +7,7 @@ wire shape, so crash-test runs never touch model-drift's pristine board.
 """
 from __future__ import annotations
 
+import itertools
 import json
 import sqlite3
 import uuid
@@ -30,6 +31,11 @@ CREATE INDEX IF NOT EXISTS ix_runs_created ON runs(created_at);
 """
 
 
+# Distinguishes one in-memory store from another without entropy. See
+# RunStore.__init__ for why entropy is not available where this is used.
+_STORE_SEQ = itertools.count()
+
+
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -40,8 +46,18 @@ class RunStore:
         # make every store share one db. A UNIQUE shared-cache name gives each
         # store its own in-memory db, shared across its own connections but
         # isolated from other stores (so tests don't bleed into each other).
+        #
+        # A process-local counter, NOT uuid4. app.py builds the app at import
+        # time, so this line runs during module import, and a Cloudflare Worker
+        # forbids entropy during isolate startup: uuid4 here raised before the
+        # app existed and every route 500d. Deferring only the name does not
+        # help, because __init__ connects two lines below. A counter gives the
+        # same uniqueness within a process, which is the only scope a
+        # shared-cache name has: these databases never outlive the process and
+        # are never named across one.
         if path == ":memory:":
-            self._path = f"file:crashkit-{uuid.uuid4().hex}?mode=memory&cache=shared"
+            self._path = (f"file:crashkit-{next(_STORE_SEQ)}"
+                          "?mode=memory&cache=shared")
             self._uri = True
         else:
             self._path, self._uri = path, False

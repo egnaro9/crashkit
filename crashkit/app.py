@@ -140,7 +140,7 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
     app.state.store = store or RunStore(os.environ.get("CRASHKIT_DB", ":memory:"))
 
     @app.get("/api/batteries")
-    def batteries() -> list[dict]:
+    async def batteries() -> list[dict]:
         return [
             {"id": bid, "label": b["label"],
              "models": [{"id": mid, "name": mm.label} for mid, mm in b["models"].items()]}
@@ -148,12 +148,12 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
         ]
 
     @app.get("/api/models")
-    def models() -> list[dict]:
+    async def models() -> list[dict]:
         return [{"id": mid, "name": mm.label, "battery": bid}
                 for bid, b in _BATTERIES.items() for mid, mm in b["models"].items()]
 
     @app.post("/api/run")
-    def do_run(body: RunRequest) -> dict:
+    async def do_run(body: RunRequest) -> dict:
         battery = _BATTERIES.get(body.battery)
         if battery is None:
             raise HTTPException(status_code=404, detail=f"unknown battery {body.battery!r}")
@@ -167,7 +167,7 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
         return {"id": run_id, **eval_run}
 
     @app.post("/api/run-multi")
-    def do_run_multi(body: RunMultiRequest) -> dict:
+    async def do_run_multi(body: RunMultiRequest) -> dict:
         """Run a battery N times against a mock target and return the variance
         report (mean vs worst-case, flaky tasks). Not stored on the leaderboard —
         the board tracks single-run vulnerability; this is a stability probe."""
@@ -183,7 +183,7 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
         return to_variance_report(mr)
 
     @app.get("/api/battery/{battery_id}")
-    def battery_prompts(battery_id: str) -> dict:
+    async def battery_prompts(battery_id: str) -> dict:
         """The prompts for a battery — so the browser can fetch each one from the
         provider directly (BYOK) and post the answers back to /api/grade."""
         b = _BATTERIES.get(battery_id)
@@ -193,7 +193,7 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
                 "tasks": [{"id": t.id, "prompt": t.prompt, "kind": t.kind} for t in b["tasks"]()]}
 
     @app.post("/api/grade")
-    def grade(body: GradeRequest) -> dict:
+    async def grade(body: GradeRequest) -> dict:
         """Grade answers the browser already fetched — the server never sees a key."""
         b = _BATTERIES.get(body.battery)
         if b is None:
@@ -203,7 +203,7 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
         return {"id": run_id, **eval_run}
 
     @app.post("/api/grade-multi")
-    def grade_multi(body: GradeMultiRequest) -> dict:
+    async def grade_multi(body: GradeMultiRequest) -> dict:
         """Grade N client-side answer-sets and report the variance — the
         never-touches path for run-N-times. Still no key here."""
         b = _BATTERIES.get(body.battery)
@@ -215,24 +215,24 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
         return to_variance_report(mr)
 
     @app.get("/api/runs")
-    def leaderboard() -> list[dict]:
+    async def leaderboard() -> list[dict]:
         return app.state.store.leaderboard()
 
     @app.get("/api/runs/{run_id}")
-    def one(run_id: str) -> dict:
+    async def one(run_id: str) -> dict:
         eval_run = app.state.store.get(run_id)
         if eval_run is None:
             raise HTTPException(status_code=404, detail="no such run")
         return {"id": run_id, **eval_run}
 
     @app.get("/healthz")
-    def healthz() -> dict:
+    async def healthz() -> dict:
         return {"status": "ok"}
 
     index = _FRONTEND / "index.html"
     if index.exists():
         @app.get("/")
-        def home() -> FileResponse:
+        async def home() -> FileResponse:
             return FileResponse(index)
 
     # The social preview card. Named explicitly rather than mounting the whole
@@ -241,13 +241,13 @@ def create_app(store: Optional[RunStore] = None) -> FastAPI:
     og = _FRONTEND / "og-cover.png"
     if og.exists():
         @app.get("/og-cover.png")
-        def og_cover() -> FileResponse:
+        async def og_cover() -> FileResponse:
             return FileResponse(og, media_type="image/png")
 
     fav = _FRONTEND / "favicon.svg"
     if fav.exists():
         @app.get("/favicon.svg")
-        def favicon() -> FileResponse:
+        async def favicon() -> FileResponse:
             return FileResponse(fav, media_type="image/svg+xml")
 
     return app

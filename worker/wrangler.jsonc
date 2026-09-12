@@ -1,0 +1,11 @@
+{
+  "name": "crashkit",
+  "main": "entry.py",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["python_workers"],
+  // frontend/ cannot ride in a python_modules bundle, so the page, the social
+  // card and the favicon are served by the assets binding instead. They resolve
+  // before the Worker runs; crashkit/app.py registers those three routes only
+  // when the directory exists on disk, so nothing double-serves them.
+  "assets": { "directory": "../frontend" }
+}

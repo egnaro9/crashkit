@@ -7,3 +7,12 @@
 __pycache__/
 build/
 venv/
+
+# built for the Worker bundle; rebuild with python -m build
+worker/dist/
+worker/.venv*/
+worker/python_modules/
+worker/pylock.toml
+worker/uv.lock
+# miniflare writes local emulator state here on every pywrangler dev run
+worker/.wrangler/
