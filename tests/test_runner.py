@@ -1,6 +1,6 @@
 """The Phase 0 run: model-drift's SUITE, mock transport, graded through gradecore,
 serialized to the eval_run wire shape — all deterministic and offline."""
-from modeldrift.providers import Model
+from crashkit._vendor.modeldrift.providers import Model
 
 from crashkit import battery_hash, modeldrift_battery, run, to_eval_run
 
@@ -22,9 +22,21 @@ def test_drifted_mock_is_caught_by_gradecore():
     assert len([res for res in r.results if not res.verdict.passed]) == 2
 
 
-def test_battery_hash_matches_modeldrift_suite_hash():
-    from modeldrift.suite import suite_hash as md_hash
-    assert battery_hash(modeldrift_battery()) == md_hash()   # faithful reuse
+def test_the_lift_preserves_every_task_id_and_prompt():
+    # NOT a provenance check, and it never was one: both sides read the same
+    # SUITE, so an edited suite moves both hashes together and this stays
+    # green. That job belongs to tests/test_vendor_fidelity.py.
+    #
+    # What it does prove is that two independent implementations agree over
+    # that SUITE: crashkit's Task -> BatteryTask lift through
+    # gradecore.suite_hash, against model-drift's own suite_hash. A lift that
+    # dropped, reordered or rewrote an id or prompt shows up here.
+    #
+    # Scope, precisely: battery.py lifts four fields (id, prompt, kind, grade)
+    # and this hash covers two of them. A lift that mangled `kind` or wrapped
+    # the wrong `grade` passes this. Nothing here reaches the answer keys.
+    from crashkit._vendor.modeldrift.suite import suite_hash as md_hash
+    assert battery_hash(modeldrift_battery()) == md_hash()
 
 
 def test_serialization_is_eval_history_shaped():

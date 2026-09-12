@@ -1,6 +1,6 @@
 """The retrieval-grounding battery: the extractive mock stays inside its context,
 the fabricating one is caught — by the SAME gradecore metric rag-eval-lab uses."""
-from modeldrift.providers import Model
+from crashkit._vendor.modeldrift.providers import Model
 
 from crashkit import (
     RETRIEVAL_BATTERY,

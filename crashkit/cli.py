@@ -16,7 +16,7 @@ import argparse
 import json
 from typing import Optional
 
-from modeldrift.providers import Model
+from ._vendor.modeldrift.providers import Model
 
 from . import (
     ADVERSARIAL_BATTERY,

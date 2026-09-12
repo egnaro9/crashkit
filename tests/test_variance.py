@@ -1,6 +1,6 @@
 """Run-N-times variance: a deterministic target is perfectly stable, a flaky one
 exposes the intermittent leak, and the report separates mean from worst-case."""
-from modeldrift.providers import Model
+from crashkit._vendor.modeldrift.providers import Model
 
 from crashkit import (
     ADVERSARIAL_BATTERY,

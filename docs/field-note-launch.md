@@ -110,14 +110,27 @@ You can check that the extraction is faithful. crashkit's correctness battery li
 
 ```python
 from crashkit.battery import modeldrift_battery, battery_hash
-from modeldrift.suite import suite_hash
+from crashkit._vendor.modeldrift.suite import suite_hash
 battery_hash(modeldrift_battery()) == suite_hash()   # -> True
 # both: e76f17b6c56e   (sha256[:12] over each task's id:prompt)
 ```
 
 If crashkit had quietly rewritten a single prompt, the hash would diverge and this would fail. `suite_hash` ([`gradecore/freeze.py`](https://github.com/egnaro9/gradecore/blob/main/gradecore/freeze.py)) exists precisely so "same suite" is a checkable fact, not a hopeful comment.
 
-**Scope of the claim, honestly:** this proves the *grading engine* is shared and the reused suite is bit-identical — that's it. crashkit does not run model-drift's whole eval stack, and adversarial runs are tagged `source="crash_test"` and never write to model-drift's board.
+**What that check does and does not cover, since the import path above gives it away.** model-drift is not published to any package index, so crashkit used to install it from a pinned git URL. A Worker runtime cannot install from git, and an evidence bundle that depends on a second repository staying reachable is weaker than one that depends only on its own tree, so the two modules crashkit actually uses are now vendored verbatim at `crashkit/_vendor/modeldrift`.
+
+That means the comparison above now reads one copy of the suite from both sides. It still proves something real: two independent implementations, crashkit's `Task` to `BatteryTask` lift through `gradecore.suite_hash` against model-drift's own `suite_hash`, agree over every task id and prompt. It no longer proves the suite came from model-drift.
+
+That second claim moved to a per-file digest. `crashkit/_vendor/MODELDRIFT_FIDELITY.json` records the source commit and a sha256 for every vendored file, `tests/test_vendor_fidelity.py` fails if the bytes on disk drift from it, and the bundle's replay block clones model-drift at that commit and `cmp`s each file. Check it without cloning anything:
+
+```bash
+git cat-file blob 3df0ccb:modeldrift/suite.py | shasum -a 256
+# bfdf98dfa4178ffcabaf3b5964d5a88fb8853c4734d12f10d1982a8cc4454231
+```
+
+Worth being blunt about why the digest exists rather than the fingerprint alone: `suite_hash` is built from `id:prompt` only, so it is blind to the answer keys. A grader predicate loosened to always-pass moves no fingerprint and no emitted artifact byte. The git pin used to be what stood in the way of that; the digest is what stands there now.
+
+**Scope of the claim, honestly:** this proves the *grading engine* is shared and the reused suite is bit-identical to the commit named in the fidelity manifest. That's it. crashkit does not run model-drift's whole eval stack, and adversarial runs are tagged `source="crash_test"` and never write to model-drift's board.
 
 ---
 
@@ -146,10 +159,11 @@ Fastest path, no install: open the hosted playground at **https://crashkit.onren
 ```bash
 git clone https://github.com/egnaro9/crashkit && cd crashkit
 git clone https://github.com/egnaro9/gradecore ../gradecore
-git clone https://github.com/egnaro9/model-drift ../model-drift
 
 python -m venv .venv && source .venv/bin/activate
-pip install -e ../gradecore -e ../model-drift -e ".[dev]"
+pip install -e ../gradecore -e ".[dev]"
+# model-drift needs no clone: the two modules crashkit uses are vendored
+# at crashkit/_vendor/modeldrift and checked against their source commit.
 
 pytest -q                 # 23 passed  (gradecore's own suite is 23 too; each repo runs its suite in CI on every push/PR)
 uvicorn crashkit.app:app --port 8011

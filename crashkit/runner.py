@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from gradecore import GradeInput, Verdict
-from modeldrift.providers import Model, ProviderError, call_meta, is_truncation
+from ._vendor.modeldrift.providers import Model, ProviderError, call_meta, is_truncation
 
 from .battery import BatteryTask, battery_hash, modeldrift_battery
 

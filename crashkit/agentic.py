@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from gradecore import Grader, trajectory
-from modeldrift.providers import Model, ProviderError
+from ._vendor.modeldrift.providers import Model, ProviderError
 
 AGENTIC_VERSION = "2026-07-v1"
 

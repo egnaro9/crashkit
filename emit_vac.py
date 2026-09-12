@@ -47,14 +47,26 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent
 ISSUER = "egnaro9/crashkit"
 
-# The two moving dependencies, pinned: gradecore computes every verdict and
-# model-drift owns the frozen SUITE + mock provider. Neither pin can be
-# derived from an installed package (pip drops the git metadata), so they
-# are constants — but the SUITE's own content fingerprint is derived live
-# into protocol.hashes, so a drifted model-drift surfaces as a stamp
-# mismatch even if this constant went stale.
+# gradecore computes every verdict and is pinned as a version constant: pip
+# drops the git metadata, so it cannot be derived from the installed package.
+# It IS enforced, against the live gradecore.__version__, further down.
 GRADECORE_PIN = "0.10.0"
-MODELDRIFT_PIN = "3df0ccb5d0b8e72075632508c186795df583a37d"
+
+# model-drift owns the frozen SUITE + mock provider and is not published to any
+# index, so it used to be installed from git and the git pin was what made
+# "crashkit runs model-drift's frozen suite" true. It is now vendored verbatim
+# under crashkit/_vendor/modeldrift. The pin is READ from the vendoring manifest
+# rather than repeated here: a second literal is a second thing to go stale.
+#
+# What this does NOT do, stated plainly because the comment here used to claim
+# otherwise: protocol.hashes["modeldrift_suite"] is built from id:prompt only
+# (modeldrift/suite.py suite_hash), so it is blind to the answer keys. A grader
+# predicate loosened to always-pass moves no fingerprint and no artifact byte.
+# The vendored per-file sha256 below is what covers that, and it is the only
+# thing that does.
+FIDELITY = json.loads(
+    (ROOT / "crashkit" / "_vendor" / "MODELDRIFT_FIDELITY.json").read_text())
+MODELDRIFT_PIN = FIDELITY["source_commit"]
 
 # CLI artifacts: argv tail -> bundle basename. Bytes are the file the real
 # subprocess writes; the in-process artifacts below use the same serializer
@@ -191,7 +203,7 @@ def run_battery(python: str = sys.executable) -> dict[str, bytes]:
                     + proc.stderr.decode(errors="replace"))
             out[name] = dst.read_bytes()
 
-    from modeldrift.providers import Model
+    from crashkit._vendor.modeldrift.providers import Model
 
     from crashkit import (ADVERSARIAL_BATTERY, flaky_transport, grade_answers,
                           run, run_n, to_eval_run, to_variance_report)
@@ -283,7 +295,30 @@ def battery_fingerprints() -> dict[str, str]:
         "adversarial_battery": adversarial_hash(),
         "agentic_battery": agentic_hash(),
         "modeldrift_suite": battery_hash(modeldrift_battery()),
+        **vendored_fingerprints(),
     }
+
+
+def vendored_fingerprints() -> dict[str, str]:
+    """sha256 over the vendored model-drift source, derived live from the tree
+    and refused if it has drifted from the committed manifest.
+
+    This is the replacement for the git pin. The battery fingerprints above
+    cover id:prompt; these cover the bytes, including the grader predicates and
+    the mock transport that produces every answer in every artifact. A
+    providers.py edit that leaves mock answer text alone moves no artifact byte
+    and would otherwise be invisible to the freshness gate as well."""
+    vendor = ROOT / "crashkit" / "_vendor"
+    out = {}
+    for rel, expected in FIDELITY["files"].items():
+        actual = hashlib.sha256((vendor / rel).read_bytes()).hexdigest()
+        if actual != expected:
+            raise RuntimeError(
+                f"vendored {rel} does not match model-drift@{MODELDRIFT_PIN} "
+                "as recorded in MODELDRIFT_FIDELITY.json. Re-vendor from "
+                "upstream; do not re-record the digest of what is on disk.")
+        out["vendored_" + rel.replace("/", "_").replace(".py", "")] = actual
+    return out
 
 
 def build_manifest(artifacts: dict[str, bytes], commit: str) -> str:
@@ -382,7 +417,12 @@ def build_manifest(artifacts: dict[str, bytes], commit: str) -> str:
                         "crashtest_battery": CRASHTEST_VERSION,
                         "agentic_battery": AGENTIC_VERSION,
                         "gradecore": GRADECORE_PIN,
-                        "modeldrift_commit": MODELDRIFT_PIN},
+                        # Renamed from modeldrift_commit: the suite is no
+                        # longer installed from this commit, it is vendored
+                        # from it. The per-file sha256 in protocol.hashes is
+                        # what a reader checks; this names where to check it
+                        # against.
+                        "modeldrift_vendored_from": MODELDRIFT_PIN},
         },
         "protocol": {
             "issuer": ISSUER,
@@ -447,12 +487,19 @@ def build_manifest(artifacts: dict[str, bytes], commit: str) -> str:
         "replay": {
             "issuer_commit": commit,
             "commands": [
-                "git clone https://github.com/egnaro9/model-drift"
-                f" && git -C model-drift checkout {MODELDRIFT_PIN[:7]}",
                 f"git clone https://github.com/{ISSUER} issuer"
                 f" && git -C issuer checkout {commit}",
-                f"python -m pip install gradecore=={GRADECORE_PIN} "
-                "./model-drift ./issuer",
+                # model-drift is vendored, not installed. The clone is kept
+                # because it now DECIDES something: every vendored file is
+                # compared byte for byte against the commit the bundle names.
+                # A clone whose outcome cannot change the verdict does not
+                # belong in a replay block.
+                "git clone https://github.com/egnaro9/model-drift md-src"
+                f" && git -C md-src checkout {MODELDRIFT_PIN[:7]}",
+                " && ".join(
+                    f"cmp md-src/{rel} issuer/crashkit/_vendor/{rel}"
+                    for rel in sorted(FIDELITY["files"])),
+                f"python -m pip install gradecore=={GRADECORE_PIN} ./issuer",
                 "( cd issuer && python emit_vac.py )",
                 "for f in adversarial_safe.eval_run.json "
                 "adversarial_vulnerable.eval_run.json "

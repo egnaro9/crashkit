@@ -1,0 +1,12 @@
+{
+  "source_repo": "https://github.com/egnaro9/model-drift",
+  "source_commit": "3df0ccb5d0b8e72075632508c186795df583a37d",
+  "vendored_at_crashkit_commit": null,
+  "why": "model-drift is not published to any package index, so an install from git is the only way to obtain it. Cloudflare Workers cannot install from git, and a VAC bundle whose replay depends on a clone of a second repository is weaker evidence than one that depends only on this tree. These files are copied byte for byte out of source_commit and are never edited here. Edit them upstream, re-vendor, and update this manifest.",
+  "checked_by": "tests/test_vendor_fidelity.py",
+  "files": {
+    "modeldrift/__init__.py": "c6049829c05b7c6f304661bb7cb517b93e4803ca3f89aab39328732e848f9bf9",
+    "modeldrift/providers.py": "ed87c2d7221a8ffec21aff94414158c3f2c0e8ce92ab56c168d5e55a5e5bc875",
+    "modeldrift/suite.py": "bfdf98dfa4178ffcabaf3b5964d5a88fb8853c4734d12f10d1982a8cc4454231"
+  }
+}

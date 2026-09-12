@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from gradecore import Grader, grounding, suite_hash
-from modeldrift.providers import Model, ProviderError
+from ._vendor.modeldrift.providers import Model, ProviderError
 
 RETRIEVAL_VERSION = "2026-07-v1"
 

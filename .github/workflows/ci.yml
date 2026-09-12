@@ -22,15 +22,20 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       # crashkit is one lens on a shared engine — and the engine is PINNED:
-      # gradecore computes every verdict and model-drift owns the frozen
-      # SUITE, so a float on either HEAD would let the deterministic claim
-      # drift while this workflow stayed green. The pins here are the same
-      # ones vac/vac.json replays against.
-      - name: Install the shared engine (pinned), the reused suite (pinned), and crashkit
+      # gradecore computes every verdict and is pinned here, the same pin
+      # vac/vac.json replays against; a float on its HEAD would let the
+      # deterministic claim drift while this workflow stayed green.
+      #
+      # model-drift used to be installed here from a pinned git URL, and that
+      # install was what made "crashkit runs model-drift's frozen SUITE" true.
+      # It is now vendored under crashkit/_vendor/modeldrift and that claim is
+      # carried by tests/test_vendor_fidelity.py, which hashes the vendored
+      # bytes against the commit they came from. Do not re-add an install here:
+      # a second copy on the path makes resolution order load-bearing.
+      - name: Install the shared engine (pinned) and crashkit
         run: |
           python -m pip install --upgrade pip
           pip install gradecore==0.10.0
-          pip install git+https://github.com/egnaro9/model-drift@3df0ccb5d0b8e72075632508c186795df583a37d
           # rag-eval-lab is required so the cross-repo grounding proof RUNS.
           # Without it the test importorskips and the suite reports green for a
           # bridge claim that never executed. A skipped proof is not a proof.
@@ -89,7 +94,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: |
           pip install gradecore==0.10.0
-          pip install git+https://github.com/egnaro9/model-drift@3df0ccb5d0b8e72075632508c186795df583a37d
           pip install -e .
       - name: The replay pin must survive every install above
         run: |

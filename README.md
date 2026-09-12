@@ -24,12 +24,12 @@ Run the mocks with no key, or bring your own to test a real model.
 
 <img src="docs/demo.gif" alt="The adversarial battery run against a deliberately-vulnerable mock: vulnerability 1.00, and one fail card per broken guarantee" width="100%">
 
-*Eight adversarial tasks against a deliberately-vulnerable mock. No API key, no network. The mock answers from a fixed profile, so every fail card reproduces byte-for-byte: `PYTHONPATH=../model-drift python3 -m demos.fail_cards`. [Play it as a terminal session](https://asciinema.org/a/1jMrzzjhacCRjt06). The text is selectable.*
+*Eight adversarial tasks against a deliberately-vulnerable mock. No API key, no network. The mock answers from a fixed profile, so every fail card reproduces byte-for-byte: `python3 -m demos.fail_cards`. [Play it as a terminal session](https://asciinema.org/a/1jMrzzjhacCRjt06). The text is selectable.*
 
 ## Run it
 
 ```bash
-pip install -e ".[dev]"          # pulls in gradecore + model-drift from git
+pip install -e ".[dev]"          # gradecore from PyPI; model-drift is vendored
 uvicorn crashkit.app:app --port 8011
 # open http://localhost:8011 : pick a battery + dummy, hit "Run the battery"
 ```
@@ -75,6 +75,8 @@ model-drift SUITE ──(bool_grader)──▶ gradecore battery
 
 - **`battery.py`**: model-drift's frozen SUITE, each `Task.grade` lifted into
   gradecore via `bool_grader`; the battery fingerprint matches model-drift's own.
+  The suite itself is vendored at `crashkit/_vendor/modeldrift`, pinned by
+  per-file sha256 to the commit it came from (`MODELDRIFT_FIDELITY.json`).
 - **`runner.py`**: runs the battery over the mock transport, grades through
   gradecore, aggregates accuracy / reliability (truncation rides on reliability,
   off the accuracy line. Same rule as model-drift).

@@ -27,7 +27,7 @@ class BatteryTask:
 def modeldrift_battery() -> list[BatteryTask]:
     """model-drift's frozen SUITE as a gradecore battery (imported lazily so the
     dependency is only needed when this battery is actually built)."""
-    from modeldrift.suite import SUITE
+    from ._vendor.modeldrift.suite import SUITE
 
     return [
         BatteryTask(id=t.id, prompt=t.prompt, kind=t.kind,

@@ -23,7 +23,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from modeldrift.providers import Model, call_meta
+from ._vendor.modeldrift.providers import Model, call_meta
 
 from . import grade_answers
 from . import run as run_battery

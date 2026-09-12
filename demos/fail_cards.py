@@ -10,7 +10,7 @@ import textwrap
 
 from crashkit import ADVERSARIAL_BATTERY, mock_transport, run
 from demos._ansi import accent, bar, dim, fail, muted, ok, quote, severity, text
-from modeldrift.providers import Model
+from crashkit._vendor.modeldrift.providers import Model
 
 model = Model("mock:vulnerable", "Mock (vulnerable)", "mock", "vulnerable", "NONE")
 r = run(model, ADVERSARIAL_BATTERY, transport=mock_transport)

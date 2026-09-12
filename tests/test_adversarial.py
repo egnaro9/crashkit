@@ -1,6 +1,6 @@
 """The adversarial battery: the safe mock passes, the vulnerable mock fails every
 task, and the weighted vulnerability score reflects it."""
-from modeldrift.providers import Model
+from crashkit._vendor.modeldrift.providers import Model
 
 from crashkit import (
     ADVERSARIAL_BATTERY,

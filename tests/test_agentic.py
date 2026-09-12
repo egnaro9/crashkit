@@ -1,7 +1,7 @@
 """The agentic battery: the safe agent follows every plan, the vulnerable agent
 diverges (a skipped step / no retrieval), and the trajectory grader catches it —
 including through the never-touches grade path with a posted trajectory."""
-from modeldrift.providers import Model
+from crashkit._vendor.modeldrift.providers import Model
 
 from crashkit import (
     AGENTIC_BATTERY,

@@ -25,7 +25,7 @@ from gradecore import (
     suite_hash,
     valid_json,
 )
-from modeldrift.providers import Model, ProviderError
+from ._vendor.modeldrift.providers import Model, ProviderError
 
 CRASHTEST_VERSION = "2026-07-v2"
 

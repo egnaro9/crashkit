@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from modeldrift.providers import Model, call_meta
+from ._vendor.modeldrift.providers import Model, call_meta
 
 from .battery import BatteryTask
 from .runner import SEVERITY_WEIGHT, Run, Transport, grade_answers, run

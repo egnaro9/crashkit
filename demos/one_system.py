@@ -17,12 +17,15 @@ Offline, no API key.
 """
 
 import dataclasses
+import hashlib
 import inspect
+import json
+import pathlib
 
 from crashkit import battery_hash, modeldrift_battery
 from demos._ansi import accent, dim, fail, muted, ok, text
 from gradecore.grounding import grounding_score
-from modeldrift.suite import SUITE, suite_hash
+from crashkit._vendor.modeldrift.suite import SUITE, suite_hash
 
 import ragevallab.evals as ragevallab
 
@@ -42,11 +45,28 @@ def rule(title):
 rule("crashkit's battery IS model-drift's suite")
 battery = modeldrift_battery()
 md, ck = suite_hash(), battery_hash(battery)
-row("model-drift  suite_hash()", md, accent)
+row("modeldrift   suite_hash()", md, accent)
 row("crashkit     battery_hash()", ck, accent)
-row("tasks", f"{len(SUITE)} in model-drift · {len(battery)} in crashkit")
-print("  " + (ok("identical — one frozen suite, two repos") if md == ck
-              else fail("DIVERGED — the extraction has drifted")))
+row("tasks", f"{len(SUITE)} in the suite | {len(battery)} in the battery")
+print("  " + (ok("identical: two implementations, one frozen suite") if md == ck
+              else fail("DIVERGED: the extraction has drifted")))
+print("  " + muted("both sides read crashkit/_vendor/modeldrift, so this checks "
+                   "the lift, not the origin"))
+
+rule("the vendored suite IS model-drift's, at a named commit")
+_fid = json.loads((pathlib.Path(__file__).resolve().parent.parent
+                   / "crashkit" / "_vendor"
+                   / "MODELDRIFT_FIDELITY.json").read_text())
+_vendor = pathlib.Path(__file__).resolve().parent.parent / "crashkit" / "_vendor"
+row("source commit", _fid["source_commit"][:12], accent)
+_clean = all(
+    hashlib.sha256((_vendor / rel).read_bytes()).hexdigest() == want
+    for rel, want in _fid["files"].items())
+print("  " + (ok(f"{len(_fid['files'])} vendored files match their recorded "
+                 "sha256") if _clean
+              else fail("TAMPERED: a vendored file no longer matches upstream")))
+print("  " + muted("this is what replaced the git pin. Check it yourself: "
+                   "git cat-file blob <commit>:modeldrift/suite.py | shasum -a 256"))
 
 rule("rag-eval-lab's faithfulness IS gradecore's grounder")
 delegates = grounding_score.__name__ in inspect.getsource(ragevallab.faithfulness)

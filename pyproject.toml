@@ -9,9 +9,8 @@ description = "The AI crash-test platform backend — run a battery, grade via g
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Erik Hill", email = "erik.hill0987@gmail.com" }]
-# gradecore and modeldrift are installed editable from sibling repos for the
-# Phase 0 local slice (pip install -e ../gradecore -e ../md-src). fastapi/uvicorn
-# power the run store + playground API (Phase 0.5).
+# gradecore comes from PyPI. fastapi/uvicorn power the run store + playground
+# API (Phase 0.5). model-drift is vendored, see the note below.
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
@@ -20,14 +19,22 @@ dependencies = [
     # requirement with the pinned local clone the replay installs.
     "gradecore>=0.10.0",
 ]
-# model-drift (the reused frozen suite + mock provider) is deliberately NOT a
-# declared dependency: the VAC replay installs it from a clone pinned to the
-# exact commit in protocol.hashes, and declaring any floating ref here would
-# put a moving target inside pinned evidence. For local work:
-#   pip install ./path-to/model-drift
+# model-drift (the reused frozen suite + mock provider) is not a dependency at
+# all any more. It is not published to any index, so the only way to install it
+# was from git, which a Worker runtime cannot do and which made the evidence
+# bundle depend on a second repository staying reachable. It is now vendored
+# verbatim under crashkit/_vendor/modeldrift, pinned by per-file sha256 in
+# crashkit/_vendor/MODELDRIFT_FIDELITY.json and checked by
+# tests/test_vendor_fidelity.py. Nothing needs installing for local work.
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "httpx>=0.27"]
 
 [tool.setuptools]
-packages = ["crashkit"]
+# The vendored tree must be listed explicitly. An unlisted subpackage is
+# omitted from a built wheel while every `pip install -e .` path in this
+# repo keeps working, so the break would only surface at deploy time.
+packages = ["crashkit", "crashkit._vendor", "crashkit._vendor.modeldrift"]
+
+[tool.setuptools.package-data]
+"crashkit._vendor" = ["MODELDRIFT_FIDELITY.json"]
