@@ -2,7 +2,7 @@
  "vac_version": "0.2",
  "claim": {
   "capability": "crashkit's no-LLM-judge battery grading is deterministic end-to-end and its graders demonstrably bite: the adversarial and agentic twin-control mock runs score exactly 0.0 (safe) and 1.0 (vulnerable) severity-weighted vulnerability, the reused 35-task model-drift suite grades 1.0 accuracy on its stable mock, the never-touches grading-replay path re-earns 0.0/1.0 from the committed answer sets alone, and a 10-run flaky-mock variance report aggregates reproducibly \u2014 every declared number recomputable offline from committed per-case rows",
-  "scope": "exactly the committed mock/replay grading path at the stamped commit: the frozen adversarial battery (2026-07-v2), the frozen agentic battery (2026-07-v1), and model-drift's reused frozen SUITE (fingerprint-identical to model-drift's own), all graded by gradecore 0.10.0 predicates; deterministic throughout: no key, no network, no LLM judge, no sampling, no clock",
+  "scope": "exactly the committed mock/replay grading path at the stamped commit: the frozen adversarial battery (2026-07-v2), the frozen agentic battery (2026-07-v1), and model-drift's reused frozen SUITE (fingerprint-identical to model-drift's own), all graded by gradecore 0.10.2 predicates; deterministic throughout: no key, no network, no LLM judge, no sampling, no clock",
   "limitations": [
    "live-model (BYOK) runs are stochastic and OUT OF SCOPE: the twin profiles are committed mocks, so these numbers certify the graders and the measurement path \u2014 that the instrument reads exactly 0.0 on a known-safe subject and exactly 1.0 on a known-broken one \u2014 not any real model's safety",
    "the hosted leaderboard (crashkit.onrender.com) and its user-submitted runs are not covered; no number here cites the site",
@@ -20,13 +20,13 @@
    "crashkit": "0.6.0",
    "crashtest_battery": "2026-07-v2",
    "agentic_battery": "2026-07-v1",
-   "gradecore": "0.10.0",
+   "gradecore": "0.10.2",
    "modeldrift_vendored_from": "3df0ccb5d0b8e72075632508c186795df583a37d"
   }
  },
  "protocol": {
   "issuer": "egnaro9/crashkit",
-  "issuer_commit": "32810e1",
+  "issuer_commit": "443b8ae",
   "task": "mock/replay battery runs + grading-replay + 10-run variance over the three frozen batteries",
   "hashes": {
    "adversarial_battery": "ace96377ed90",
@@ -218,12 +218,12 @@
   ]
  },
  "replay": {
-  "issuer_commit": "32810e1",
+  "issuer_commit": "443b8ae",
   "commands": [
-   "git clone https://github.com/egnaro9/crashkit issuer && git -C issuer checkout 32810e1",
+   "git clone https://github.com/egnaro9/crashkit issuer && git -C issuer checkout 443b8ae",
    "git clone https://github.com/egnaro9/model-drift md-src && git -C md-src checkout 3df0ccb",
    "cmp md-src/modeldrift/__init__.py issuer/crashkit/_vendor/modeldrift/__init__.py && cmp md-src/modeldrift/providers.py issuer/crashkit/_vendor/modeldrift/providers.py && cmp md-src/modeldrift/suite.py issuer/crashkit/_vendor/modeldrift/suite.py",
-   "python -m pip install gradecore==0.10.0 ./issuer",
+   "python -m pip install gradecore==0.10.2 ./issuer",
    "( cd issuer && python emit_vac.py )",
    "for f in adversarial_safe.eval_run.json adversarial_vulnerable.eval_run.json agentic_safe.eval_run.json agentic_vulnerable.eval_run.json grading_replay_safe.eval_run.json grading_replay_vulnerable.eval_run.json modeldrift_suite.eval_run.json variance_flaky_n10.report.json vac.json; do cmp issuer/vac/$f $f || exit 1; done"
   ],
