@@ -32,11 +32,25 @@ _BATTERIES = {
     "agentic": (lambda: AGENTIC_BATTERY, agentic_transport),
 }
 
+# Both mock transports raise ProviderError on an unknown profile, and the runner
+# grades that as an error, which is right for a real outage. The consequence
+# here is not: every task errors, so a MISSPELLED profile scores
+# vulnerability=1.0 and exits 0, which is the worst possible score and is
+# indistinguishable from a genuinely vulnerable model on every published metric
+# except reliability. --battery was already guarded by argparse choices; this is
+# the same guard for the other argument.
+_PROFILES = ("safe", "vulnerable")
+
 
 def build(battery: str = "adversarial", profile: str = "safe") -> dict:
     """A crash-test eval_run dict for one mock profile — deterministic, no key."""
     if battery not in _BATTERIES:
         raise ValueError(f"unknown battery {battery!r} (one of {list(_BATTERIES)})")
+    if profile not in _PROFILES:
+        raise ValueError(f"unknown profile {profile!r} (one of {list(_PROFILES)}). "
+                         "Refusing to run: an unknown profile errors every task "
+                         "and reports vulnerability=1.0, which reads as a "
+                         "maximally vulnerable model rather than a typo.")
     tasks_fn, transport = _BATTERIES[battery]
     model = Model(f"mock:{profile}", f"Mock ({profile})", "mock", profile, "NONE")
     return to_eval_run(run(model, tasks_fn(), transport=transport))
@@ -45,7 +59,8 @@ def build(battery: str = "adversarial", profile: str = "safe") -> dict:
 def main(argv: Optional[list] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--battery", default="adversarial", choices=list(_BATTERIES))
-    ap.add_argument("--profile", default="safe", help="mock profile: safe | vulnerable")
+    ap.add_argument("--profile", default="safe", choices=list(_PROFILES),
+                    help="mock profile")
     ap.add_argument("--out", default="crash_run.json")
     args = ap.parse_args(argv)
 

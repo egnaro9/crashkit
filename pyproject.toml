@@ -14,10 +14,17 @@ authors = [{ name = "Erik Hill", email = "erik.hill0987@gmail.com" }]
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
-    # The shared grading engine, from PyPI — a git@main dependency is a moving
+    # The shared grading engine, from PyPI. A git@main dependency is a moving
     # ref, and the replay CI proved it: pip cannot reconcile a direct-URL
     # requirement with the pinned local clone the replay installs.
-    "gradecore>=0.10.0",
+    #
+    # PINNED, not >=. emit_vac.py refuses any version but GRADECORE_PIN, so a
+    # floor let pip resolve a newer gradecore and the repo's own documented
+    # install (`pip install -e ".[dev]" && pytest -q`) went red on six bundle
+    # tests. CI never saw it: both jobs install gradecore==0.10.0 explicitly
+    # before this file is consulted, so the pinned path was the only one under
+    # test and the reader's path was not.
+    "gradecore==0.10.0",
 ]
 # model-drift (the reused frozen suite + mock provider) is not a dependency at
 # all any more. It is not published to any index, so the only way to install it

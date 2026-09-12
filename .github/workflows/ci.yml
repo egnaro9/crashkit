@@ -67,6 +67,37 @@ jobs:
       - name: Tests — incl. the determinism guarantee and the bundle gates
         run: pytest -q
 
+  # The README's own two commands, with NOTHING pinned for us. Every other job
+  # installs gradecore==0.10.0 explicitly and sets PIP_CONSTRAINT, so they test
+  # the pinned path and never the one a reader takes. That gap shipped: a
+  # `gradecore>=0.10.0` floor let pip resolve 0.10.2, emit_vac.py refuses any
+  # version but its pin, and six bundle tests went red on a fresh clone while
+  # all four jobs here stayed green. This job exists to go red instead.
+  #
+  # Deliberately NO env: PIP_CONSTRAINT and NO explicit engine install. If you
+  # find yourself adding either to make this pass, the dependency declaration is
+  # what needs fixing.
+  readme-path:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Exactly what README.md tells a reader to run
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          # test_retrieval is ignored ON PURPOSE and only here: it hard-fails
+          # rather than skips when CI=true and rag-eval-lab is absent, and the
+          # README does not tell a reader to install rag-eval-lab. The `test`
+          # job above installs it and runs that proof for real.
+          pytest -q --ignore=tests/test_retrieval.py
+      - name: The emitter must run on that same install
+        run: |
+          python emit_vac.py
+          git diff --exit-code -- vac/
+
   bundle-freshness:
     # Same job-level constraint as `test`. This job did NOT go red in the ten-day
     # outage, because it never installs rag-eval-lab, and that asymmetry is exactly
