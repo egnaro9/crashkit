@@ -81,6 +81,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # same reason as bundle-freshness below: the stamp is
+                           # the last CODE-touching commit, and a depth-1 clone
+                           # cannot see past HEAD, so emit_vac stamps the bundle
+                           # commit instead and the diff never matches
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
