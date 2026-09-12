@@ -50,7 +50,7 @@ ISSUER = "egnaro9/crashkit"
 # gradecore computes every verdict and is pinned as a version constant: pip
 # drops the git metadata, so it cannot be derived from the installed package.
 # It IS enforced, against the live gradecore.__version__, further down.
-GRADECORE_PIN = "0.10.0"
+GRADECORE_PIN = "0.10.2"
 
 # model-drift owns the frozen SUITE + mock provider and is not published to any
 # index, so it used to be installed from git and the git pin was what made

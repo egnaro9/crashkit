@@ -11,7 +11,7 @@ jobs:
     # Set for the whole job, not per step: the failure this prevents was an install
     # two lines BELOW the pin, so binding one command is exactly what did not work.
     env:
-      PIP_CONSTRAINT: ${{ github.workspace }}/ci/constraints/replay-gradecore-0.10.0.txt
+      PIP_CONSTRAINT: ${{ github.workspace }}/ci/constraints/replay-gradecore.txt
     strategy:
       fail-fast: false
       matrix:
@@ -35,7 +35,7 @@ jobs:
       - name: Install the shared engine (pinned) and crashkit
         run: |
           python -m pip install --upgrade pip
-          pip install gradecore==0.10.0
+          pip install gradecore==0.10.2
           # rag-eval-lab is required so the cross-repo grounding proof RUNS.
           # Without it the test importorskips and the suite reports green for a
           # bridge claim that never executed. A skipped proof is not a proof.
@@ -49,7 +49,7 @@ jobs:
           # Read the expected version OUT of the constraints file. An assertion that
           # restates the number can agree with itself while both drift from emit_vac.
           line = next(l.strip() for l in pathlib.Path(
-              "ci/constraints/replay-gradecore-0.10.0.txt").read_text().splitlines()
+              "ci/constraints/replay-gradecore.txt").read_text().splitlines()
               if l.strip() and not l.lstrip().startswith("#"))
           want, got = line.split("==")[1], gradecore.__version__
           if got != want:
@@ -68,9 +68,9 @@ jobs:
         run: pytest -q
 
   # The README's own two commands, with NOTHING pinned for us. Every other job
-  # installs gradecore==0.10.0 explicitly and sets PIP_CONSTRAINT, so they test
+  # installs the pinned gradecore explicitly and sets PIP_CONSTRAINT, so they test
   # the pinned path and never the one a reader takes. That gap shipped: a
-  # `gradecore>=0.10.0` floor let pip resolve 0.10.2, emit_vac.py refuses any
+  # `gradecore>=0.10.0` floor let pip resolve a newer one, emit_vac.py refuses any
   # version but its pin, and six bundle tests went red on a fresh clone while
   # all four jobs here stayed green. This job exists to go red instead.
   #
@@ -109,7 +109,7 @@ jobs:
     # what made the repo read as half-healthy. Pin it here too rather than rely on
     # this job continuing to install less than the other one.
     env:
-      PIP_CONSTRAINT: ${{ github.workspace }}/ci/constraints/replay-gradecore-0.10.0.txt
+      PIP_CONSTRAINT: ${{ github.workspace }}/ci/constraints/replay-gradecore.txt
     # The battery + emitter re-run must reproduce the closed VAC bundle
     # byte-for-byte, stamp included. `git status --porcelain` rather than
     # `git diff` so a NEW untracked artifact also fails — a diff-only gate
@@ -129,7 +129,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: |
-          pip install gradecore==0.10.0
+          pip install gradecore==0.10.2
           pip install -e .
       - name: The replay pin must survive every install above
         run: |
@@ -139,7 +139,7 @@ jobs:
           # Read the expected version OUT of the constraints file. An assertion that
           # restates the number can agree with itself while both drift from emit_vac.
           line = next(l.strip() for l in pathlib.Path(
-              "ci/constraints/replay-gradecore-0.10.0.txt").read_text().splitlines()
+              "ci/constraints/replay-gradecore.txt").read_text().splitlines()
               if l.strip() and not l.lstrip().startswith("#"))
           want, got = line.split("==")[1], gradecore.__version__
           if got != want:

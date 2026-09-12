@@ -21,10 +21,10 @@ dependencies = [
     # PINNED, not >=. emit_vac.py refuses any version but GRADECORE_PIN, so a
     # floor let pip resolve a newer gradecore and the repo's own documented
     # install (`pip install -e ".[dev]" && pytest -q`) went red on six bundle
-    # tests. CI never saw it: both jobs install gradecore==0.10.0 explicitly
+    # tests. CI never saw it: both jobs install the pinned gradecore explicitly
     # before this file is consulted, so the pinned path was the only one under
     # test and the reader's path was not.
-    "gradecore==0.10.0",
+    "gradecore==0.10.2",
 ]
 # model-drift (the reused frozen suite + mock provider) is not a dependency at
 # all any more. It is not published to any index, so the only way to install it
