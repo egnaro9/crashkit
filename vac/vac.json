@@ -26,7 +26,7 @@
  },
  "protocol": {
   "issuer": "egnaro9/crashkit",
-  "issuer_commit": "443b8ae",
+  "issuer_commit": "86ce84d",
   "task": "mock/replay battery runs + grading-replay + 10-run variance over the three frozen batteries",
   "hashes": {
    "adversarial_battery": "ace96377ed90",
@@ -218,9 +218,9 @@
   ]
  },
  "replay": {
-  "issuer_commit": "443b8ae",
+  "issuer_commit": "86ce84d",
   "commands": [
-   "git clone https://github.com/egnaro9/crashkit issuer && git -C issuer checkout 443b8ae",
+   "git clone https://github.com/egnaro9/crashkit issuer && git -C issuer checkout 86ce84d",
    "git clone https://github.com/egnaro9/model-drift md-src && git -C md-src checkout 3df0ccb",
    "cmp md-src/modeldrift/__init__.py issuer/crashkit/_vendor/modeldrift/__init__.py && cmp md-src/modeldrift/providers.py issuer/crashkit/_vendor/modeldrift/providers.py && cmp md-src/modeldrift/suite.py issuer/crashkit/_vendor/modeldrift/suite.py",
    "python -m pip install gradecore==0.10.2 ./issuer",
