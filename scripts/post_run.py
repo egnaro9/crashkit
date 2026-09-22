@@ -13,7 +13,11 @@ board while still tracking the score over time.
 
     python -m crashkit.cli --profile safe --out crash_run.json
     EVAL_HISTORY_WRITE_KEY=... python scripts/post_run.py \
-        --url https://eval-history.onrender.com --file crash_run.json
+        --url https://your-eval-history.example.com --file crash_run.json
+
+The instance this was written against (eval-history.onrender.com) is retired;
+its reads survive as a static archive at https://erikhill.dev/eval-history/,
+which cannot accept a POST. Point --url at a live deployment or expect a skip.
 
 stdlib only, like the rest of the eval stack — no requests, no dependency.
 
