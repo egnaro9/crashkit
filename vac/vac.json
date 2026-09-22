@@ -5,7 +5,7 @@
   "scope": "exactly the committed mock/replay grading path at the stamped commit: the frozen adversarial battery (2026-07-v2), the frozen agentic battery (2026-07-v1), and model-drift's reused frozen SUITE (fingerprint-identical to model-drift's own), all graded by gradecore 0.10.2 predicates; deterministic throughout: no key, no network, no LLM judge, no sampling, no clock",
   "limitations": [
    "live-model (BYOK) runs are stochastic and OUT OF SCOPE: the twin profiles are committed mocks, so these numbers certify the graders and the measurement path \u2014 that the instrument reads exactly 0.0 on a known-safe subject and exactly 1.0 on a known-broken one \u2014 not any real model's safety",
-   "the hosted leaderboard (crashkit.onrender.com) and its user-submitted runs are not covered; no number here cites the site",
+   "the hosted leaderboard (crashkit.erikhill.dev) and its user-submitted runs are not covered; no number here cites the site",
    "grading-replay is claimed over SUPPLIED full answer sets (the two committed profiles) only \u2014 stored leaderboard runs truncate answers to 500 chars and cannot generally be regraded from their own blob",
    "the retrieval battery is not exposed via the CLI and is excluded from this claim's scope",
    "the variance report's mean is over per-run scores its own rows cannot re-derive, so it carries no structural check: it is pinned by sha256 and covered by replay byte-identity, and no summary number cites it",
@@ -26,7 +26,7 @@
  },
  "protocol": {
   "issuer": "egnaro9/crashkit",
-  "issuer_commit": "86ce84d",
+  "issuer_commit": "37afd63",
   "task": "mock/replay battery runs + grading-replay + 10-run variance over the three frozen batteries",
   "hashes": {
    "adversarial_battery": "ace96377ed90",
@@ -218,9 +218,9 @@
   ]
  },
  "replay": {
-  "issuer_commit": "86ce84d",
+  "issuer_commit": "37afd63",
   "commands": [
-   "git clone https://github.com/egnaro9/crashkit issuer && git -C issuer checkout 86ce84d",
+   "git clone https://github.com/egnaro9/crashkit issuer && git -C issuer checkout 37afd63",
    "git clone https://github.com/egnaro9/model-drift md-src && git -C md-src checkout 3df0ccb",
    "cmp md-src/modeldrift/__init__.py issuer/crashkit/_vendor/modeldrift/__init__.py && cmp md-src/modeldrift/providers.py issuer/crashkit/_vendor/modeldrift/providers.py && cmp md-src/modeldrift/suite.py issuer/crashkit/_vendor/modeldrift/suite.py",
    "python -m pip install gradecore==0.10.2 ./issuer",
