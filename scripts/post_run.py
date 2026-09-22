@@ -34,9 +34,11 @@ import time
 import urllib.error
 import urllib.request
 
-# The free tier sleeps after ~15 minutes idle and takes ~30-50s to wake, so the
-# first attempt is expected to be slow or to fail outright. Retrying is not
-# papering over flakiness — it's the documented behaviour of the host.
+# The target may be cold or scaled to zero, so the first attempt can be slow or
+# fail outright. Retrying is not papering over flakiness, it is the documented
+# behaviour of that kind of host. This was written for a free tier that slept
+# after ~15 minutes and took ~30-50s to wake; the retry outlives the host it was
+# written for, because the shape of the problem did not change.
 TIMEOUT = 90
 ATTEMPTS = 3
 BACKOFF = 20
@@ -98,7 +100,7 @@ def main() -> int:
         print(f"attempt {attempt}/{ATTEMPTS} failed ({status or 'no response'}): {body[:120]}",
               file=sys.stderr)
         if attempt < ATTEMPTS:
-            print(f"  waiting {BACKOFF}s — the free tier is probably still waking up",
+            print(f"  retrying in {BACKOFF}s; the target may still be cold",
                   file=sys.stderr)
             time.sleep(BACKOFF)
 

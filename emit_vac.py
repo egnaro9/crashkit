@@ -386,7 +386,7 @@ def build_manifest(artifacts: dict[str, bytes], commit: str) -> str:
                 "instrument reads exactly 0.0 on a known-safe subject and "
                 "exactly 1.0 on a known-broken one — not any real model's "
                 "safety",
-                "the hosted leaderboard (crashkit.onrender.com) and its "
+                "the hosted leaderboard (crashkit.erikhill.dev) and its "
                 "user-submitted runs are not covered; no number here cites "
                 "the site",
                 "grading-replay is claimed over SUPPLIED full answer sets "

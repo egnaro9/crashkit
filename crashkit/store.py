@@ -1,9 +1,11 @@
 """A tiny SQLite run store for the crash-test leaderboard.
 
 Stores each run's eval_run.json blob plus the fields the leaderboard sorts on.
-Phase 0 uses stdlib sqlite3 and is self-contained; Phase 1 points this at a
-*separate* eval-history instance (the separation guardrail) reusing the same
-wire shape, so crash-test runs never touch model-drift's pristine board.
+Stdlib sqlite3, self-contained. The separation guardrail, that crash-test runs
+never touch model-drift's pristine board, is carried by this store being its own
+thing rather than by pointing at a second eval-history instance: that plan is
+dead with the hosting it assumed. The wire shape is kept compatible anyway, so a
+shared store stays possible without a rewrite.
 """
 from __future__ import annotations
 
