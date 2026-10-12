@@ -29,7 +29,7 @@ dependencies = [
     # tests. CI never saw it: both jobs install the pinned gradecore explicitly
     # before this file is consulted, so the pinned path was the only one under
     # test and the reader's path was not.
-    "gradecore==0.10.2",
+    "gradecore==0.10.3",
 ]
 # model-drift (the reused frozen suite + mock provider) is not a dependency at
 # all any more. It is not published to any index, so the only way to install it

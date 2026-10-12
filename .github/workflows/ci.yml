@@ -35,7 +35,7 @@ jobs:
       - name: Install the shared engine (pinned) and crashkit
         run: |
           python -m pip install --upgrade pip
-          pip install gradecore==0.10.2
+          pip install gradecore==0.10.3
           # rag-eval-lab is required so the cross-repo grounding proof RUNS.
           # Without it the test importorskips and the suite reports green for a
           # bridge claim that never executed. A skipped proof is not a proof.
@@ -129,7 +129,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: |
-          pip install gradecore==0.10.2
+          pip install gradecore==0.10.3
           pip install -e .
       - name: The replay pin must survive every install above
         run: |

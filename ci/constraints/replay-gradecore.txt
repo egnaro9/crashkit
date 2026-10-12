@@ -14,4 +14,4 @@
 #
 # This must stay equal to GRADECORE_PIN in emit_vac.py. The CI assertion reads the
 # version out of THIS file rather than repeating it, so the two cannot drift apart.
-gradecore==0.10.2
+gradecore==0.10.3
