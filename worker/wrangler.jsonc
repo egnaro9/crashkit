@@ -5,7 +5,14 @@
   // is lonimoonfairy (72f7ad2bcbfe5daadbfe677d61568028); erikhill.dev was
   // moved off it on 2026-09-12 and nothing of Erik's should go back.
   "account_id": "4705fd918037663060a5d81780fac669",
-  "main": "entry.py",
+  // In src/, not next to this file. wrangler uploads every .py and .txt under
+  // the entry point's directory, and worker/ also holds .venv (build.sh) and
+  // .venv-workers (pywrangler): with the entry here, both shipped as Worker
+  // modules beside python_modules, about three times the bundle, none of it in
+  // the deploy's dependency record. python_modules is still found next to this
+  // file, and the assets directory below is still relative to this file.
+  // Measured with `wrangler deploy --dry-run --outdir`, 2026-10-20.
+  "main": "src/entry.py",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["python_workers"],
   // frontend/ cannot ride in a python_modules bundle, so the page, the social

@@ -1,0 +1,466 @@
+name: deploy
+# A button, not a pipeline. workflow_dispatch is the ONLY trigger, so a deploy
+# happens when someone presses Run workflow (the GitHub mobile app can), and never
+# because a commit landed or a clock ticked. Do not add push or schedule: merging
+# to main is not the same decision as changing what https://crashkit.erikhill.dev
+# serves.
+on:
+  workflow_dispatch:
+
+# Read the repo, read ci's run history, nothing else. actions: read is what lets
+# github.token list ci's runs for the gate below. Nothing here writes to GitHub:
+# upload-artifact authenticates with the runner's own artifact token, not this one.
+permissions:
+  contents: read
+  actions: read
+
+# One production Worker, so one deploy at a time whatever ref it came from: the
+# group is a fixed string, not keyed on the branch. cancel-in-progress is false
+# because a run cancelled inside `pywrangler deploy` leaves it unknown whether the
+# new version went live, and skips the checks that would have said. GitHub keeps
+# only ONE pending run per group, so a third press while one runs and one waits
+# replaces the waiting one; the running deploy is never touched.
+concurrency:
+  group: deploy-crashkit-production
+  cancel-in-progress: false
+
+# The implicit default shell is `bash -e {0}`, with no pipefail, so a failing
+# command piped into tee would read as success. Naming bash gets
+# `bash --noprofile --norc -eo pipefail {0}` for every step.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # THE CONTROL THAT A BRANCH CANNOT EDIT AWAY. workflow_dispatch runs the
+    # deploy.yml of whatever ref is picked in "Use workflow from", so a branch can
+    # delete the main-only check below, or weaken its own ci.yml and earn a real
+    # green run. YAML cannot stop that; a GitHub environment can. Keep
+    # CLOUDFLARE_API_TOKEN as a secret of the "production" environment, not of
+    # the repo, and set that environment's deployment branches to main only.
+    # Then a run from any other ref never receives the token at all.
+    environment: production
+    # Build, Pyodide vendoring and the upload take a few minutes; the post-deploy
+    # loop gives up within about ten more. Thirty is headroom for a slow runner,
+    # and it is what stops a hung npx or uv from holding the concurrency group.
+    timeout-minutes: 30
+    env:
+      SITE_URL: https://crashkit.erikhill.dev
+    steps:
+      # FIRST, before checkout or any install: without the token every later step
+      # is wasted minutes that end in a wrangler auth error, and on a phone that
+      # error is a long scroll away. The token is passed to this step only so it
+      # can be tested, and nothing prints it. It is deliberately NOT in the job
+      # env: only this step and the deploy step receive it, so the pip, uv and npx
+      # installs in between never see it.
+      - name: Fail fast if the CLOUDFLARE_API_TOKEN secret is missing
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          token="${CLOUDFLARE_API_TOKEN:-}"
+          # Whitespace is stripped before the test so a secret saved as a stray
+          # newline counts as empty here, instead of failing later as a bad login.
+          if [ -z "${token//[[:space:]]/}" ]; then
+            msg='The secret CLOUDFLARE_API_TOKEN is missing or empty. Create a Cloudflare API token in account erik.hill0987 from the "Edit Cloudflare Workers" template, then add it as a secret of this repo'"'"'s production environment, with that environment limited to the main branch.'
+            echo "::error title=CLOUDFLARE_API_TOKEN is not set::${msg}"
+            {
+              echo "### Deploy refused: no Cloudflare API token"
+              echo
+              echo "${msg}"
+              echo
+              echo "1. Signed in to Cloudflare as erik.hill0987: My Profile, API Tokens, Create Token, template \"Edit Cloudflare Workers\" (https://dash.cloudflare.com/profile/api-tokens)."
+              echo "2. Account Resources: the account pinned as account_id in worker/wrangler.jsonc. Zone Resources must cover erikhill.dev, the zone that carries the custom domain route."
+              echo "3. In ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/settings/environments open (or create) \"production\", set Deployment branches to main only, and add the token there as the environment secret CLOUDFLARE_API_TOKEN."
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "CLOUDFLARE_API_TOKEN is set (value not printed)."
+
+      # Refuse to ship a commit ci has not passed. Asked of the API, not wired
+      # with needs or workflow_run, because this is a button: the run that proves
+      # the commit happened earlier, in another workflow. Also before checkout, so
+      # a refusal costs seconds.
+      #
+      # The rule, and why each part of it:
+      #  * Only runs whose head_sha IS this commit, re-checked here rather than
+      #    trusting the query filter, because a filter the API silently ignored
+      #    would hand back other commits' green runs.
+      #  * Only push and workflow_dispatch runs, because those check out exactly
+      #    head_sha. A pull_request run reports the PR head as head_sha but tests
+      #    the MERGE commit (refs/pull/N/merge), a different tree from the one
+      #    being deployed. Any other event fails closed too: a trigger ci grows
+      #    later is not trusted until someone checks what it really checks out.
+      #  * Any such run not yet completed refuses. Its verdict is pending and may
+      #    be the newest one, so nothing before it settles the question yet.
+      #  * Otherwise the MOST RECENT run decides, ordered by run_started_at. A
+      #    re-run keeps its run id and created_at but moves run_started_at, so
+      #    that is the field that makes a later failed re-run count as later and
+      #    block even after an earlier green attempt. An older green run never
+      #    outvotes a newer red one: a commit that has gone red is not reliably
+      #    green, and a production deploy is the wrong place to bet on a flake.
+      - name: Refuse unless ci passed on this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha="$GITHUB_SHA"
+
+          # MAIN, AND ONLY ITS CURRENT HEAD. Re-running an old deploy run reuses
+          # that run's commit and that commit's deploy.yml, and its ci is still
+          # green, so every check below passed and production silently rolled
+          # back. The ref check is a guard against picking the wrong branch by
+          # accident; a branch could delete it, which is why the production
+          # environment above is the real control.
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error title=Deploys come from main only::This run is for ${GITHUB_REF}. Press Run workflow with main selected under Use workflow from."
+            exit 1
+          fi
+          if ! head="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"; then
+            echo "::error title=Could not read main's head::gh api git/ref/heads/main failed (see above), so it is unknown whether ${sha} is still current."
+            exit 1
+          fi
+          if [ "$head" != "$sha" ]; then
+            echo "::error title=Not main's current head::This run is for ${sha} but main is at ${head}. Re-running an old deploy would roll production back. Press Run workflow fresh to deploy main as it is now."
+            exit 1
+          fi
+          echo "${sha} is main's current head."
+
+          api="repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${sha}&per_page=100"
+          if ! runs="$(gh api --paginate "$api" --jq '.workflow_runs[]')"; then
+            echo "::error title=Could not read ci runs::gh api ${api} failed (see above). This job needs permissions actions: read."
+            exit 1
+          fi
+          # --jq prints one run per line across every page; -s folds them back
+          # into one array.
+          candidates="$(jq -s -c --arg sha "$sha" '
+            map(select(.head_sha == $sha and (.event == "push" or .event == "workflow_dispatch")))
+            | sort_by(.run_started_at // .created_at, .id)' <<<"$runs")"
+          echo "ci runs that tested ${sha} itself, oldest first:"
+          jq -r '.[] | "  \(.run_started_at // .created_at)  \(.event)  attempt \(.run_attempt)  \(.status)/\(.conclusion // "none")  \(.html_url)"' <<<"$candidates"
+
+          if [ "$(jq 'length' <<<"$candidates")" -eq 0 ]; then
+            echo "  (none)"
+            echo "::error title=No ci run for this commit::ci has no push or workflow_dispatch run for ${sha}. Run ci on this ref (Actions, ci, Run workflow), wait for it to pass, then press deploy again. pull_request runs do not count: they test a merge commit, not this one."
+            exit 1
+          fi
+
+          pending="$(jq -r '[.[] | select(.status != "completed")] | .[0].html_url // empty' <<<"$candidates")"
+          if [ -n "$pending" ]; then
+            echo "::error title=ci is still running on this commit::${pending} has not finished, and its verdict may be the newest. Wait for it, then press deploy again."
+            exit 1
+          fi
+
+          latest="$(jq -c 'last' <<<"$candidates")"
+          conclusion="$(jq -r '.conclusion // "none"' <<<"$latest")"
+          url="$(jq -r '.html_url' <<<"$latest")"
+          if [ "$conclusion" != "success" ]; then
+            echo "::error title=ci did not pass on this commit::The most recent ci run for ${sha} concluded ${conclusion}: ${url}. An earlier green run does not count once a later one is not green; re-run ci and deploy when it passes."
+            exit 1
+          fi
+          read -r id attempt event started < <(jq -r '"\(.id) \(.run_attempt) \(.event) \(.run_started_at // .created_at)"' <<<"$latest")
+          echo "Accepted ci run ${id} (attempt ${attempt}, ${event}, started ${started}): ${url}"
+          echo "ci gate: accepted run [${id} attempt ${attempt}](${url}) (${event}, started ${started}) for \`${sha}\`." >> "$GITHUB_STEP_SUMMARY"
+
+      # persist-credentials: false because nothing here pushes, and the deploy
+      # step runs whatever wrangler npm serves that minute (pywrangler calls
+      # `npx --yes wrangler`, unpinned). That code has no business finding a git
+      # credential in .git/config.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # 3.12 is the python3 that build.sh's `python3 -m build` lands on. It does
+      # not choose the Worker's Python: pywrangler reads that off
+      # compatibility_date in worker/wrangler.jsonc and vendors for Pyodide with
+      # its own interpreter.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      # build.sh calls uv, and pywrangler shells out to uv for every resolve and
+      # install and refuses a uv below its floor, so take the latest release.
+      # Cache off: build.sh deletes and re-creates uv.lock on every run, so there
+      # is no lockfile at checkout for a cache key, and a key that never changes
+      # is a cache that never invalidates.
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+      # pywrangler drives wrangler through `npx --yes wrangler`, and wrangler's
+      # engines field requires Node 22 or newer. No package-manager cache: there
+      # is no package.json here, wrangler arrives through npx.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      # Exactly what worker/build.sh documents: rebuild the wheel, then re-lock
+      # against it, ALWAYS both, or every `uv run` dies on a hash mismatch that
+      # names the wheel instead of the stale lock. `build` goes into the same
+      # python3 build.sh falls back to, since a fresh checkout has no .venv.
+      - name: Build the crashkit wheel and re-lock the Worker (worker/build.sh)
+        run: |
+          python3 -m pip install build
+          bash worker/build.sh
+
+      # `pywrangler deploy` runs this same sync first, and skips it when the
+      # vendored tree is newer than pyproject.toml and pylock.toml. Running it
+      # here is what lets the next step list the exact tree deploy will upload,
+      # rather than a guess at it.
+      - name: Vendor the Worker's packages for Pyodide (the sync deploy runs first)
+        run: cd worker && uv run pywrangler sync
+
+      # WHAT WRANGLER WOULD UPLOAD, CHECKED BEFORE IT DOES. wrangler uploads every
+      # .py and .txt under the entry point's directory. With the entry at
+      # worker/entry.py that swept in worker/.venv and worker/.venv-workers, about
+      # 2,700 extra files and three times the bundle, none of them in the record
+      # below. The entry now lives in worker/src/, and this dry run is what keeps
+      # it that way: anything at the top of the bundle besides the entry point,
+      # python_modules and wrangler's own README refuses the deploy. No token is
+      # needed for a dry run.
+      - name: Refuse if the bundle would ship anything but the entry point and python_modules
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/bundle"
+          (cd worker && npx --yes wrangler deploy --dry-run --outdir "$out")
+          extra="$(find "$out" -mindepth 1 -maxdepth 1 -printf '%f\n' | grep -vxE 'entry\.py|python_modules|README\.md' || true)"
+          if [ -n "$extra" ]; then
+            echo "::error title=Unexpected files in the Worker bundle::wrangler would also upload: $(tr '\n' ' ' <<<"$extra"). Keep the entry point in worker/src/ so the build venvs stay out of the upload."
+            exit 1
+          fi
+          (cd "$out" && find . -type f | sort) > "${RUNNER_TEMP}/bundle-files.txt"
+          echo "bundle: $(wc -l < "${RUNNER_TEMP}/bundle-files.txt") files, nothing outside entry.py and python_modules"
+
+      # LOG AND KEEP WHAT SHIPS. workers-py and fastapi are UNPINNED in
+      # worker/pyproject.toml, and build.sh deletes uv.lock and pylock.toml on
+      # every run, so each deploy resolves them afresh: two presses a week apart
+      # can put different code live from the same commit, and this artifact is
+      # the only record of which versions a given deploy actually shipped.
+      #
+      # Listed from worker/python_modules, NOT from worker/.venv or uv.lock. Those
+      # are the host CPython environment build.sh made. pywrangler resolves again
+      # for Pyodide, against the Pyodide package index, into pylock.toml and
+      # installs that into python_modules, the directory wrangler uploads. The two
+      # resolutions are separate and need not agree, so only this one is the
+      # truth. It is the same `uv pip freeze --path python_modules` pywrangler runs
+      # itself to pin its host venv to production. pylock.toml (wheel URLs and
+      # hashes) and the host lock export go into the artifact as well.
+      #
+      # The wheel's sha256 is recorded because the wheel is rebuilt every run and
+      # its bytes are not reproducible, so its file path alone identifies nothing.
+      - name: Record the resolved dependency list the Worker will ship
+        id: deps
+        run: |
+          set -euo pipefail
+          short_sha="${GITHUB_SHA::7}"
+          out="${RUNNER_TEMP}/worker-dependencies"
+          list="${out}/python_modules.txt"
+          mkdir -p "$out"
+          shipped="$(cd worker && uv pip freeze --color never --path python_modules)"
+          if [ -z "$shipped" ]; then
+            echo "::error title=Empty dependency list::uv pip freeze found nothing in worker/python_modules, so there is no record of what deploy would upload. Refusing to deploy blind."
+            exit 1
+          fi
+          {
+            echo "# crashkit Worker: worker/python_modules as vendored for ${GITHUB_SHA}"
+            (cd worker/dist && sha256sum ./*.whl) | sed 's/^/# wheel sha256: /'
+            echo "# built with $(uv --version), node $(node --version), wrangler $(npx --yes wrangler --version) (via npx, as resolved at this step)"
+            printf '%s\n' "$shipped"
+          } > "$list"
+          cp worker/pylock.toml "${out}/pylock.toml"
+          cp "${RUNNER_TEMP}/bundle-files.txt" "${out}/bundle-files.txt"
+          (cd worker && uv export --frozen --no-header) > "${out}/host-uv-lock-export.txt"
+
+          cat "$list"
+          {
+            echo "### Worker dependencies shipped by ${short_sha}"
+            echo
+            echo "workers-py and fastapi are unpinned in worker/pyproject.toml, so this list is resolved fresh on every deploy."
+            echo
+            echo '```'
+            cat "$list"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "dir=${out}"
+            echo "short_sha=${short_sha}"
+          } >> "$GITHUB_OUTPUT"
+
+      # Uploaded BEFORE deploy, so a deploy that fails halfway still leaves the
+      # record of what it was trying to ship. The attempt number is in the name
+      # because a re-run of this job uploads again, and an artifact name can be
+      # used only once per workflow run.
+      - name: Upload the dependency list
+        uses: actions/upload-artifact@v7
+        with:
+          name: worker-dependencies-${{ steps.deps.outputs.short_sha }}-attempt${{ github.run_attempt }}
+          path: ${{ steps.deps.outputs.dir }}
+          if-no-files-found: error
+
+      # /healthz returns only {"status": "ok"} today and carries no version or
+      # commit, so it cannot say WHICH commit is live; the page hash below does
+      # that. Rather than copy today's shape into this file, ask this commit's own
+      # app what /healthz answers, through the same ASGI call the Worker makes
+      # (worker/src/entry.py hands every request to asgi.fetch(app, ...)), and require
+      # the live body to equal it. A field a later commit adds there, a version or
+      # a sha, is then checked against the commit with no edit here. -I keeps the
+      # source tree off sys.path, so this is the built wheel answering.
+      - name: Ask this commit's app what /healthz returns
+        run: |
+          set -euo pipefail
+          worker/.venv/bin/python -I - > "${RUNNER_TEMP}/healthz.expected.json" <<'PYEOF'
+          import asyncio
+          import json
+          import sys
+
+          from crashkit.app import app
+
+
+          async def get(path):
+              sent = []
+
+              async def receive():
+                  return {"type": "http.request", "body": b"", "more_body": False}
+
+              async def send(message):
+                  sent.append(message)
+
+              await app({"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
+                         "method": "GET", "scheme": "https", "path": path,
+                         "raw_path": path.encode(), "root_path": "", "query_string": b"",
+                         "headers": []}, receive, send)
+              status = next(m["status"] for m in sent if m["type"] == "http.response.start")
+              body = b"".join(m.get("body", b"") for m in sent if m["type"] == "http.response.body")
+              return status, body
+
+
+          status, body = asyncio.run(get("/healthz"))
+          if status != 200:
+              sys.exit(f"this commit's own app answers /healthz with HTTP {status}, so no live check could pass")
+          print(json.dumps(json.loads(body), sort_keys=True))
+          PYEOF
+          echo "this commit's /healthz answers: $(cat "${RUNNER_TEMP}/healthz.expected.json")"
+
+      # account_id is pinned in worker/wrangler.jsonc so a deploy cannot land in
+      # the wrong Cloudflare account, and that file is the one place it lives. Do
+      # not add CLOUDFLARE_ACCOUNT_ID here. wrangler 4.151.2 reads the config's
+      # account_id first and that variable only as a fallback, so today it would
+      # be a second copy that can drift from the pin while doing nothing; and
+      # wrangler arrives unpinned through npx, so that order is not one to lean on.
+      - name: Deploy
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: cd worker && uv run pywrangler deploy
+
+      # A fresh deploy can take a little while to be served everywhere, so both
+      # checks retry, bounded: ATTEMPTS tries INTERVAL_SECONDS apart, each request
+      # capped at 10 seconds, so the step gives up within about ten minutes.
+      #
+      # (a) / must be 200 and byte-identical to frontend/index.html in this
+      #     checkout. The assets binding serves that file as is, so any other hash
+      #     means the old page is still live or the wrong thing deployed. curl
+      #     sends no Accept-Encoding, so the edge answers with the raw bytes.
+      # (b) /healthz must be 200, JSON, status "ok", and equal to what this
+      #     commit's app answered in the step above.
+      - name: Post-deploy checks (live page is this commit, /healthz is ok)
+        env:
+          INDEX_FILE: frontend/index.html
+          EXPECTED_HEALTHZ: ${{ runner.temp }}/healthz.expected.json
+          ATTEMPTS: "20"
+          INTERVAL_SECONDS: "10"
+        run: |
+          # No -e: a failed attempt has to reach the retry, not end the step.
+          set -uo pipefail
+          work="$(mktemp -d)"
+          want_index="$(sha256sum "$INDEX_FILE" | cut -d' ' -f1)"
+          want_size="$(wc -c < "$INDEX_FILE" | tr -d ' ')"
+          want_health="$(cat "$EXPECTED_HEALTHZ")"
+          cat > "${work}/healthz_check.py" <<'PYEOF'
+          import json
+          import sys
+
+          got_path, want_path = sys.argv[1], sys.argv[2]
+          with open(want_path) as f:
+              want = json.load(f)
+          raw = open(got_path, "rb").read()
+          try:
+              got = json.loads(raw)
+          except ValueError:
+              sys.exit("body is not JSON: " + raw[:120].decode("utf-8", "replace"))
+          if not isinstance(got, dict) or got.get("status") != "ok":
+              sys.exit("status is not ok: " + json.dumps(got, sort_keys=True)[:200])
+          if got != want:
+              sys.exit("body " + json.dumps(got, sort_keys=True)[:200]
+                       + " is not what this commit's app returns, " + json.dumps(want, sort_keys=True))
+          PYEOF
+
+          # Short, printable excerpt of a response body, for the log only.
+          excerpt() { head -c 100 "$1" | tr -c '[:print:]' ' '; }
+
+          echo "want: ${SITE_URL}/ sha256 ${want_index} (${want_size} bytes, ${INDEX_FILE}); ${SITE_URL}/healthz ${want_health}"
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            if code="$(curl -sS -o "${work}/index" -w '%{http_code}' --connect-timeout 5 --max-time 10 \
+                         -H 'Cache-Control: no-cache' "${SITE_URL}/" 2>"${work}/index.err")"; then
+              if [ "$code" != "200" ]; then
+                index_result="/ answered HTTP ${code}: $(excerpt "${work}/index")"
+              else
+                got_index="$(sha256sum "${work}/index" | cut -d' ' -f1)"
+                if [ "$got_index" = "$want_index" ]; then
+                  index_result="ok"
+                else
+                  index_result="/ sha256 ${got_index} ($(wc -c < "${work}/index" | tr -d ' ') bytes) is not ${INDEX_FILE} at this commit"
+                fi
+              fi
+            else
+              index_result="/ request failed: $(tail -n 1 "${work}/index.err")"
+            fi
+
+            if code="$(curl -sS -o "${work}/health" -w '%{http_code}' --connect-timeout 5 --max-time 10 \
+                         -H 'Cache-Control: no-cache' "${SITE_URL}/healthz" 2>"${work}/health.err")"; then
+              if [ "$code" != "200" ]; then
+                health_result="/healthz answered HTTP ${code}: $(excerpt "${work}/health")"
+              elif why="$(python3 "${work}/healthz_check.py" "${work}/health" "$EXPECTED_HEALTHZ" 2>&1)"; then
+                health_result="ok"
+              else
+                health_result="/healthz ${why}"
+              fi
+            else
+              health_result="/healthz request failed: $(tail -n 1 "${work}/health.err")"
+            fi
+
+            if [ "$index_result" = "ok" ] && [ "$health_result" = "ok" ]; then
+              echo "attempt ${attempt}/${ATTEMPTS}: / is byte-identical to ${INDEX_FILE} and /healthz is ${want_health}"
+              {
+                echo "### Live at ${SITE_URL}"
+                echo
+                echo "- \`/\` sha256 \`${want_index}\` equals \`${INDEX_FILE}\` at \`${GITHUB_SHA}\`"
+                echo "- \`/healthz\` answered \`${want_health}\`, which is what this commit's app returns"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "attempt ${attempt}/${ATTEMPTS}: index: ${index_result} | healthz: ${health_result}"
+            if [ "$attempt" -lt "$ATTEMPTS" ]; then
+              sleep "$INTERVAL_SECONDS"
+            fi
+          done
+
+          echo "::error title=Post-deploy checks never passed::After ${ATTEMPTS} attempts ${SITE_URL} is still not serving this commit. index: ${index_result} | healthz: ${health_result}. A different page hash means the old page is still live or the wrong thing deployed. The deploy step reported success, so check which version is active in the Cloudflare dashboard."
+          exit 1
+
+      # deploy's own sync is skipped when nothing changed since the vendoring
+      # step, and that skip is what makes the uploaded list the uploaded tree. But
+      # workers-py is unpinned, so the skip is a behaviour of whatever version
+      # resolved today: check it rather than assume it. Runs even when the live
+      # checks failed, because it answers a different question.
+      - name: The packages deploy uploaded must be the ones recorded above
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        env:
+          LIST: ${{ steps.deps.outputs.dir }}/python_modules.txt
+        run: |
+          set -euo pipefail
+          now="$(cd worker && uv pip freeze --color never --path python_modules)"
+          if ! diff <(grep -v '^#' "$LIST") <(printf '%s\n' "$now"); then
+            echo "::error title=Shipped packages differ from the record::python_modules changed between the recorded list and the end of deploy (diff above), so the uploaded worker-dependencies artifact does not describe what is live."
+            exit 1
+          fi
+          echo "python_modules after deploy matches the uploaded list."
