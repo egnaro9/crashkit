@@ -3,8 +3,9 @@
 **Point it at a model, run a battery of tasks, read the deterministic grades.**
 No LLM judge. Every verdict is a predicate you can rerun and get the same
 answer. The adversarial, on-demand counterpart to
-[model-drift](https://github.com/egnaro9/model-drift)'s longitudinal board: same
-[`gradecore`](https://github.com/egnaro9/gradecore) engine, two lenses.
+[model-drift](https://github.com/egnaro9/model-drift)'s longitudinal board,
+graded by [`gradecore`](https://github.com/egnaro9/gradecore), which is
+wire-compatible with model-drift (identical `suite_hash`).
 
 Two batteries. A correctness **suite** (reused from model-drift) and an
 **adversarial** crash-test (injection, tool-abuse, unsafe-compliance,
